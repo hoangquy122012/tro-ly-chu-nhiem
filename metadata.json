@@ -1,0 +1,8 @@
+{
+  "name": "EduMaster AI - Sổ Chủ Nhiệm THCS",
+  "description": "Trợ lý Số Quản trị Lớp học & Cố vấn Sư phạm bám sát Sổ Công Tác Chủ Nhiệm và Thông tư 22/2021/TT-BGDĐT",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
