@@ -27,6 +27,7 @@ interface DataIntakeTabProps {
   currentWeek: number;
   onApplyWeekData: (report: WeeklyReport, newRecords: BehaviorRecord[]) => void;
   onNavigateToReport: () => void;
+  className?: string;
 }
 
 export type IntakeWorkflowStage = 'idle' | 'step1_confirmation' | 'step2_confirmed';
@@ -37,6 +38,7 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
   currentWeek,
   onApplyWeekData,
   onNavigateToReport,
+  className = '9.5',
 }) => {
   const [activeMode, setActiveMode] = useState<'upload' | 'text'>('upload');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -347,7 +349,7 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
             Bóc tách Dữ liệu Sổ Đầu Bài &amp; Sổ Trực Cờ Đỏ
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Hệ thống tự động quét nhận diện ngày tháng, đối chiếu danh sách lớp 7A1, bóc tách chuẩn 4 trường{' '}
+            Hệ thống tự động quét nhận diện ngày tháng, đối chiếu danh sách {className ? (className.startsWith('Lớp') ? className : `Lớp ${className}`) : 'Lớp 9.5'}, bóc tách chuẩn 4 trường{' '}
             <strong className="text-white bg-blue-800/60 px-1.5 py-0.5 rounded font-mono text-xs">
               [Ngày/Thứ] - [Tiết] - [Môn] - [Hành vi cụ thể]
             </strong>

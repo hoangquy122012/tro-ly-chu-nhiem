@@ -1,57 +1,28 @@
-import React, { useState } from 'react';
-import { Cloud, Check, LogOut, ShieldCheck, Sparkles, BookMarked, User as UserIcon, RotateCcw, Sliders } from 'lucide-react';
-import { User } from 'firebase/auth';
-import { googleSignIn, logout } from '../services/firebaseAuth';
+import React from 'react';
+import { ShieldCheck, Sparkles, BookMarked, RotateCcw, Sliders, RefreshCw, Database } from 'lucide-react';
 import { SystemProfile } from '../types';
 
 interface HeaderProps {
-  user: User | null;
-  hasDriveToken: boolean;
-  onDriveAuthChange: (user: User | null, token: string | null) => void;
-  onExportToDrive: () => void;
-  isExporting: boolean;
   currentMonth: number;
   currentSemester: 1 | 2;
   onOpenResetModal: () => void;
   profile: SystemProfile;
   onOpenProfileSettings: () => void;
+  syncStatus?: 'syncing' | 'synced' | 'error' | 'idle';
+  lastSyncedTime?: string | null;
+  onManualSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  user,
-  hasDriveToken,
-  onDriveAuthChange,
-  onExportToDrive,
-  isExporting,
   currentMonth,
   currentSemester,
   onOpenResetModal,
   profile,
   onOpenProfileSettings,
+  syncStatus = 'synced',
+  lastSyncedTime,
+  onManualSync,
 }) => {
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const handleSignIn = async () => {
-    setIsSigningIn(true);
-    setErrorMsg(null);
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        onDriveAuthChange(result.user, result.accessToken);
-      }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Đăng nhập không thành công');
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    await logout();
-    onDriveAuthChange(null, null);
-  };
-
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
@@ -111,99 +82,47 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Google Workspace Drive Integration & Actions */}
-        <div className="flex items-center gap-3">
-          {hasDriveToken && user ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onExportToDrive}
-                disabled={isExporting}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition shadow-sm disabled:opacity-50"
-                title="Lưu báo cáo tuần lên Google Drive"
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                {isExporting ? 'Đang lưu...' : 'Lưu lên Drive'}
-              </button>
-
-              <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt={user.displayName || 'GV'} className="w-5 h-5 rounded-full" />
-                ) : (
-                  <UserIcon className="w-4 h-4 text-slate-400" />
-                )}
-                <span className="text-slate-200 max-w-[120px] truncate hidden sm:inline">
-                  {user.displayName || user.email}
-                </span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <Check className="w-2.5 h-2.5 mr-0.5" /> Drive
-                </span>
+        {/* Supabase Cloud Auto-Sync Status Badge */}
+        <div className="flex items-center gap-2">
+          {syncStatus === 'syncing' ? (
+            <div
+              className="flex items-center gap-2 bg-blue-950/80 border border-blue-400/50 rounded-lg px-3 py-1.5 text-xs text-blue-200 shadow-sm animate-pulse"
+              title="Đang đồng bộ dữ liệu lớp học lên Supabase Cloud..."
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-300 animate-spin" />
+              <span className="font-semibold text-cyan-300">🔄 Đang lưu lên Cloud...</span>
+            </div>
+          ) : syncStatus === 'error' ? (
+            <div
+              className="flex items-center gap-2 bg-amber-950/80 border border-amber-500/50 rounded-lg px-3 py-1.5 text-xs text-amber-200 shadow-sm"
+              title="Lưu vào LocalStorage thành công. Lỗi kết nối Supabase Cloud."
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span className="font-medium text-amber-300">⚠️ Đã lưu Local</span>
+              {onManualSync && (
                 <button
-                  onClick={handleSignOut}
-                  className="text-slate-400 hover:text-red-400 ml-1 p-1 rounded hover:bg-slate-700 transition"
-                  title="Đăng xuất Google Drive"
+                  onClick={onManualSync}
+                  className="ml-1 text-[11px] underline text-amber-200 hover:text-white cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  Thử lại
                 </button>
-              </div>
+              )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              {/* Official Google Material Sign-In Button */}
-              <button
-                onClick={handleSignIn}
-                disabled={isSigningIn}
-                className="gsi-material-button text-xs transition transform active:scale-95 disabled:opacity-60"
-                style={{
-                  backgroundColor: '#ffffff',
-                  color: '#1f1f1f',
-                  border: '1px solid #747775',
-                  borderRadius: '4px',
-                  boxSizing: 'border-box',
-                  cursor: 'pointer',
-                  fontFamily: '"Roboto", arial, sans-serif',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  height: '36px',
-                  padding: '0 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <svg
-                  version="1.1"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 48 48"
-                  style={{ display: 'block', width: '18px', height: '18px' }}
-                >
-                  <path
-                    fill="#EA4335"
-                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                  ></path>
-                  <path
-                    fill="#4285F4"
-                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                  ></path>
-                  <path
-                    fill="#FBBC05"
-                    d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                  ></path>
-                  <path
-                    fill="#34A853"
-                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                  ></path>
-                </svg>
-                <span>{isSigningIn ? 'Đang kết nối...' : 'Kết nối Google Drive'}</span>
-              </button>
+            <div
+              onClick={onManualSync}
+              className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/50 rounded-lg px-3 py-1.5 text-xs text-emerald-200 shadow-sm cursor-pointer hover:bg-emerald-900/60 transition group"
+              title="Cơ sở dữ liệu đám mây Supabase đã đồng bộ hoàn tất. Nhấn để đồng bộ thủ công."
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-semibold text-emerald-300">
+                🟢 Supabase Cloud: Đã đồng bộ {lastSyncedTime ? `[${lastSyncedTime}]` : ''}
+              </span>
+              <RefreshCw className="w-3 h-3 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:rotate-180 transition duration-300" />
             </div>
           )}
         </div>
       </div>
-      {errorMsg && (
-        <div className="bg-red-500/20 border-b border-red-500/40 text-red-200 text-xs px-4 py-1.5 text-center">
-          {errorMsg}
-        </div>
-      )}
     </header>
   );
 };

@@ -195,6 +195,15 @@ export interface DriveSavedFile {
   webViewLink?: string;
 }
 
+export interface ClassOfficers {
+  classLeader?: string; // Lớp trưởng
+  viceLeader?: string; // Lớp phó
+  groupLeader1?: string; // Tổ trưởng Tổ 1
+  groupLeader2?: string; // Tổ trưởng Tổ 2
+  groupLeader3?: string; // Tổ trưởng Tổ 3
+  groupLeader4?: string; // Tổ trưởng Tổ 4
+}
+
 export interface SystemProfile {
   schoolName: string; // e.g. "Trường THCS Nguyễn Công Trứ"
   className: string; // e.g. "9.5"
@@ -203,6 +212,7 @@ export interface SystemProfile {
   teacherTitle: 'Cô' | 'Thầy'; // e.g. "Cô"
   teacherPhone: string; // e.g. "0978057875"
   alertThreshold: number; // e.g. 3
+  officers?: ClassOfficers; // Ban cán sự lớp (tùy chọn)
   template1Monthly: string; // Mẫu 1: Nhắc nhở định kỳ cuối tháng
   template2Urgent: string; // Mẫu 2: Cảnh báo khẩn cấp trong tuần
   template3Praise: string; // Mẫu 3: Tuyên dương tiến bộ / thành tích

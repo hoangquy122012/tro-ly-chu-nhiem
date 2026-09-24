@@ -8,26 +8,91 @@ export const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.file');
 
-// Cache the access token in memory (never in localStorage/sessionStorage)
+export const AUTH_STORAGE_KEY = 'edumaster_auth_state';
+
+export interface StoredUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+export interface StoredAuthState {
+  user: StoredUser | null;
+  accessToken: string | null;
+  connectedAt: string;
+}
+
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
+
+export const getStoredAuthState = (): StoredAuthState | null => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Lỗi đọc auth state từ localStorage:', e);
+    return null;
+  }
+};
+
+export const saveAuthState = (user: User | StoredUser | null, token: string | null) => {
+  if (!user && !token) {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return;
+  }
+  try {
+    const data: StoredAuthState = {
+      user: user
+        ? {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+          }
+        : null,
+      accessToken: token,
+      connectedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Lỗi lưu auth state vào localStorage:', e);
+  }
+};
+
+export const clearStoredAuthState = () => {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+};
 
 export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
+  // First check localStorage for persistent auth state
+  const stored = getStoredAuthState();
+  if (stored?.accessToken && stored?.user) {
+    cachedAccessToken = stored.accessToken;
+    if (onAuthSuccess) {
+      onAuthSuccess(stored.user as unknown as User, stored.accessToken);
+    }
+  }
+
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        // Access token is memory-only; if reloaded, user needs to trigger sign in or use current credentials
+      const currentStored = getStoredAuthState();
+      const token = cachedAccessToken || currentStored?.accessToken;
+      if (token) {
+        cachedAccessToken = token;
+        saveAuthState(user, token);
+        if (onAuthSuccess) onAuthSuccess(user, token);
+      }
+    } else {
+      const currentStored = getStoredAuthState();
+      if (!currentStored?.accessToken) {
         cachedAccessToken = null;
         if (onAuthFailure) onAuthFailure();
       }
-    } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
     }
   });
 };
@@ -42,6 +107,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
 
     cachedAccessToken = credential.accessToken;
+    saveAuthState(result.user, cachedAccessToken);
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Lỗi đăng nhập Google Workspace:', error);
@@ -52,7 +118,9 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  return cachedAccessToken;
+  if (cachedAccessToken) return cachedAccessToken;
+  const stored = getStoredAuthState();
+  return stored?.accessToken || null;
 };
 
 export const setCachedAccessToken = (token: string | null) => {
@@ -60,6 +128,11 @@ export const setCachedAccessToken = (token: string | null) => {
 };
 
 export const logout = async () => {
-  await auth.signOut();
+  try {
+    await auth.signOut();
+  } catch (e) {
+    console.error(e);
+  }
   cachedAccessToken = null;
+  clearStoredAuthState();
 };

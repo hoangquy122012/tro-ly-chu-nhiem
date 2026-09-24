@@ -224,33 +224,47 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
   }
 });
 
-// API endpoint to parse natural language barem rules
+// API endpoint to parse natural language barem rules or uploaded barem document/image
 app.post('/api/parse-barem', async (req, res) => {
   try {
-    const { nlpText } = req.body;
-    if (!nlpText) {
-      return res.status(400).json({ error: 'Nội dung quy tắc trống' });
+    const { nlpText, fileBase64, mimeType, fileName } = req.body;
+    if (!nlpText && !fileBase64) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp văn bản hoặc tệp Barem (Ảnh/Word/PDF)' });
     }
 
-    const prompt = `
+    const promptText = `
 Bạn là chuyên gia quy chế thi đua Đội TNTP và Sổ Chủ Nhiệm THCS.
-Hãy phân tích đoạn văn bản quy định điểm trừ/điểm cộng thi đua sau đây thành danh sách các quy tắc Barem điểm:
-"${nlpText}"
+${fileBase64 ? 'Hãy đọc và bóc tách TOÀN BỘ quy chế thi đua, bảng điểm trừ, bảng điểm cộng từ tệp tài liệu được cung cấp.' : 'Hãy phân tích đoạn văn bản quy định điểm trừ/điểm cộng thi đua sau:'}
+${nlpText ? `Nội dung văn bản: "${nlpText}"` : ''}
 
-Bắt buộc trả về JSON Array thuần túy:
+Nhiệm vụ:
+Nhận diện và bóc tách tất cả danh mục hành vi vi phạm, lỗi nề nếp, điểm kiểm tra, việc tốt cùng số điểm trừ (số âm, VD: -1, -2, -5, -10) hoặc số điểm cộng (số dương, VD: 1, 2, 5).
+
+Bắt buộc trả về JSON Array thuần túy (không kèm markdown):
 [
   {
-    "name": "Tên lỗi hoặc việc tốt",
-    "category": "di_muon | mat_trat_tu | quen_bai | diem_duoi_5 | khong_dong_phuc | diem_tot | viec_tot | nghi_hoc | bo_tiet | thai_do_sai | khen_thuong | khac",
-    "points": -2 (số âm nếu là điểm trừ, số dương nếu là điểm cộng),
-    "description": "Mô tả ngắn gọn điều kiện áp dụng"
+    "name": "Tên quy định / Lỗi vi phạm / Việc tốt",
+    "category": "di_muon | mat_trat_tu | quen_bai | diem_duoi_5 | khong_dong_phuc | diem_tot | viec_tot | nghi_hoc | bo_tiet | thai_do_sai | phe_binh | khen_thuong | vi_pham_nghiem_trong | khac",
+    "points": -2,
+    "description": "Mô tả ngắn gọn điều kiện áp dụng hoặc căn cứ điểm trừ"
   }
 ]
 `;
 
+    const parts: any[] = [];
+    if (fileBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: mimeType || 'image/jpeg',
+          data: fileBase64.replace(/^data:[^;]+;base64,/, ''),
+        },
+      });
+    }
+    parts.push({ text: promptText });
+
     const result = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
-      contents: prompt,
+      contents: { parts },
       config: {
         responseMimeType: 'application/json',
         temperature: 0.1,

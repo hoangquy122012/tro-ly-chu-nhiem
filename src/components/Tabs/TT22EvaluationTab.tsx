@@ -5,9 +5,14 @@ import { Student, BehaviorRecord, TT22Rank } from '../../types';
 interface TT22EvaluationTabProps {
   students: Student[];
   records: BehaviorRecord[];
+  className?: string;
 }
 
-export const TT22EvaluationTab: React.FC<TT22EvaluationTabProps> = ({ students, records }) => {
+export const TT22EvaluationTab: React.FC<TT22EvaluationTabProps> = ({
+  students,
+  records,
+  className = '9.5',
+}) => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Tháng 9/2026');
   const [overrideNotes, setOverrideNotes] = useState<Record<string, string>>({});
   const [overriddenRanks, setOverriddenRanks] = useState<Record<string, TT22Rank>>({});
@@ -162,7 +167,7 @@ export const TT22EvaluationTab: React.FC<TT22EvaluationTabProps> = ({ students, 
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              Bảng Đánh Giá Kết Quả Rèn Luyện Lớp 7A1 – {selectedPeriod}
+              Bảng Đánh Giá Kết Quả Rèn Luyện {className ? (className.startsWith('Lớp') ? className : `Lớp ${className}`) : 'Lớp 9.5'} – {selectedPeriod}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Chuẩn danh mục hồ sơ Sổ Chủ Nhiệm và cơ sở dữ liệu ngành Giáo Dục

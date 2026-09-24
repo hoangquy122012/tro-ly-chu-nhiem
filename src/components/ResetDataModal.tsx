@@ -25,6 +25,7 @@ interface ResetDataModalProps {
   currentWeek: number;
   currentMonth: number;
   currentSemester: 1 | 2;
+  className?: string;
   onExecuteMonthReset: (fromMonth: number, toMonth: number) => void;
   onExecuteSemesterReset: () => void;
   onExecuteCorrection: (recordId: string, reason: string) => void;
@@ -40,6 +41,7 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
   currentWeek,
   currentMonth,
   currentSemester,
+  className = '9.5',
   onExecuteMonthReset,
   onExecuteSemesterReset,
   onExecuteCorrection,
@@ -57,8 +59,15 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
   const [correctionReason, setCorrectionReason] = useState<string>('Ghi nhầm tên học sinh');
   const [customReasonNote, setCustomReasonNote] = useState<string>('');
 
-  // Mode 4 state (Hard reset confirmation)
+  // Mode 4 state (Hard reset confirmation) - Dynamic based on class name
   const [hardResetConfirmText, setHardResetConfirmText] = useState<string>('');
+
+  // Chuẩn hóa Tên lớp: loại bỏ dấu chấm/ký tự đặc biệt và viết hoa (VD: 9.5 -> 95, 8A2 -> 8A2)
+  const normalizedClassCode = (className || '9.5')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase() || '95';
+  const expectedResetCode = `RESET ${normalizedClassCode}`;
+  const isHardResetUnlocked = hardResetConfirmText.trim() === expectedResetCode;
 
   if (!isOpen) return null;
 
@@ -88,7 +97,7 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
   };
 
   const handleApplyHardReset = () => {
-    if (hardResetConfirmText !== 'RESET 7A1') return;
+    if (!isHardResetUnlocked) return;
     onExecuteHardReset();
     setHardResetConfirmText('');
     onClose();
@@ -485,13 +494,13 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
 
               <div className="bg-white p-4 rounded-xl border border-rose-200 space-y-2">
                 <label className="block text-xs font-bold text-rose-900">
-                  Xác nhận bảo mật: Nhập chính xác dòng chữ <code className="text-rose-700 bg-rose-100 px-2 py-0.5 rounded">RESET 7A1</code> để mở khóa:
+                  Xác nhận bảo mật: Nhập chính xác dòng chữ <code className="text-rose-700 bg-rose-100 px-2 py-0.5 rounded font-mono font-bold">{expectedResetCode}</code> để mở khóa:
                 </label>
                 <input
                   type="text"
                   value={hardResetConfirmText}
                   onChange={(e) => setHardResetConfirmText(e.target.value)}
-                  placeholder="Nhập: RESET 7A1"
+                  placeholder={`Nhập: ${expectedResetCode}`}
                   className="w-full text-xs font-mono font-bold bg-rose-50/50 border border-rose-300 rounded-lg p-2.5 text-rose-900 focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
                 />
               </div>
@@ -499,8 +508,12 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
               <div className="pt-2 flex justify-end">
                 <button
                   onClick={handleApplyHardReset}
-                  disabled={hardResetConfirmText !== 'RESET 7A1'}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-bold text-xs shadow-md transition"
+                  disabled={!isHardResetUnlocked}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition ${
+                    isHardResetUnlocked
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer ring-2 ring-rose-400'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  }`}
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Xác Nhận Hard Reset Toàn Bộ</span>

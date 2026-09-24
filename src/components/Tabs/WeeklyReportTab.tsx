@@ -91,6 +91,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
   // UI state
   const [copiedZaloIndex, setCopiedZaloIndex] = useState<number | null>(null);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [copied13Table, setCopied13Table] = useState<boolean>(false);
   const [scnViewMode, setScnViewMode] = useState<'grouped' | 'individual'>('grouped');
   const [selectedTemplateMode, setSelectedTemplateMode] = useState<'template1' | 'template2' | 'template3'>('template1');
 
@@ -455,16 +456,124 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
   const handleCopySCNTable = (rows: GroupedScnExportRow[]) => {
     let tsv = `Ngày, tháng, năm\tHọ, tên học sinh\tCác biểu hiện cụ thể đáng chú ý (Tìm hiểu hoàn cảnh, theo dõi, biểu dương, khen ngợi hoặc nhắc nhở, phê bình)\tBiện pháp giáo dục\n`;
 
-    rows.forEach((row) => {
-      const datesText = row.dates.join('\n');
-      const expText = row.expressions.map((e) => cleanExpressionText(e)).join('\n');
-      const measureText = row.measures.map((m) => cleanEducationalMeasureText(m)).join('\n');
-      tsv += `"${datesText}"\t"${row.studentName}"\t"${expText}"\t"${measureText}"\n`;
+    const htmlRows = rows
+      .map((row) => {
+        const datesHtml = row.dates.join('<br/>');
+        const expHtml = row.expressions.map((e) => cleanExpressionText(e)).join('<br/>');
+        const measureHtml = row.measures.map((m) => cleanEducationalMeasureText(m)).join('<br/>');
+        const datesTsv = row.dates.join('; ');
+        const expTsv = row.expressions.map((e) => cleanExpressionText(e)).join('; ');
+        const measureTsv = row.measures.map((m) => cleanEducationalMeasureText(m)).join('; ');
+
+        tsv += `"${datesTsv}"\t"${row.studentName}"\t"${expTsv}"\t"${measureTsv}"\n`;
+
+        return `<tr>
+          <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center;">${datesHtml}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333; font-weight: bold;">${row.studentName}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333;">${expHtml}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333; font-style: italic;">${measureHtml}</td>
+        </tr>`;
+      })
+      .join('\n');
+
+    const htmlContent = `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; font-family: 'Times New Roman', serif; font-size: 12pt; width: 100%;">
+      <thead>
+        <tr style="background-color: #f1f5f9; font-weight: bold; text-align: center;">
+          <th style="padding: 8px 10px; border: 1px solid #333333; width: 120px;">Ngày tháng</th>
+          <th style="padding: 8px 10px; border: 1px solid #333333; width: 180px;">Họ và tên học sinh</th>
+          <th style="padding: 8px 10px; border: 1px solid #333333;">Biểu hiện cụ thể</th>
+          <th style="padding: 8px 10px; border: 1px solid #333333; width: 220px;">Biện pháp giáo dục</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${htmlRows}
+      </tbody>
+    </table>`;
+
+    try {
+      const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+      const textBlob = new Blob([tsv], { type: 'text/plain' });
+      const item = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob,
+      });
+      navigator.clipboard.write([item]).catch(() => {
+        navigator.clipboard.writeText(tsv);
+      });
+    } catch {
+      navigator.clipboard.writeText(tsv);
+    }
+
+    setCopiedSection('scn');
+    setTimeout(() => setCopiedSection(null), 2000);
+  };
+
+  const getIndicatorDeduction = (ind: StudentWeeklyIndicator) => {
+    if (ind.pointsFormula) return ind.pointsFormula;
+    if ([7, 8, 9, 12].includes(ind.index)) {
+      return ind.count > 0 ? `+${ind.count * 1}đ` : '0đ';
+    }
+    if (ind.index === 13 || ind.index === 11) {
+      return '0đ';
+    }
+    return ind.count > 0 ? `-${ind.count * 2}đ` : '0đ';
+  };
+
+  const handleCopy13Indicators = (indicators: StudentWeeklyIndicator[]) => {
+    // HTML format for rich-text paste into Excel and Word preserving borders and styles
+    const htmlRows = indicators
+      .map((ind) => {
+        const points = getIndicatorDeduction(ind);
+        const detailsClean = ind.details || 'Không ghi nhận';
+        return `<tr>
+          <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center; font-weight: bold;">${ind.index}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333; font-weight: 600;">${ind.title}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333;">${detailsClean}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center; font-weight: bold;">${ind.count}</td>
+          <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center; font-weight: bold;">${points}</td>
+        </tr>`;
+      })
+      .join('\n');
+
+    const htmlContent = `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; font-family: 'Times New Roman', serif; font-size: 12pt; width: 100%;">
+  <thead>
+    <tr style="background-color: #f1f5f9; font-weight: bold; text-align: center;">
+      <th style="padding: 8px 10px; border: 1px solid #333333; width: 50px;">STT</th>
+      <th style="padding: 8px 10px; border: 1px solid #333333; text-align: left; width: 220px;">Chỉ số vi phạm</th>
+      <th style="padding: 8px 10px; border: 1px solid #333333; text-align: left;">Danh sách học sinh &amp; Số lần</th>
+      <th style="padding: 8px 10px; border: 1px solid #333333; width: 110px;">Tổng số lượt</th>
+      <th style="padding: 8px 10px; border: 1px solid #333333; width: 100px;">Điểm trừ</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${htmlRows}
+  </tbody>
+</table>`;
+
+    // Tab-delimited format for plain text paste
+    let tsv = `STT\tChỉ số vi phạm\tDanh sách học sinh & Số lần\tTổng số lượt\tĐiểm trừ\n`;
+    indicators.forEach((ind) => {
+      const points = getIndicatorDeduction(ind);
+      const detailsClean = (ind.details || 'Không ghi nhận').replace(/\t/g, ' ').replace(/\n/g, ' ');
+      tsv += `${ind.index}\t${ind.title}\t${detailsClean}\t${ind.count}\t${points}\n`;
     });
 
-    navigator.clipboard.writeText(tsv);
-    setCopiedSection('scn');
-    setTimeout(() => setCopiedSection(null), 2500);
+    try {
+      const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+      const textBlob = new Blob([tsv], { type: 'text/plain' });
+      const item = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob,
+      });
+      navigator.clipboard.write([item]).catch(() => {
+        navigator.clipboard.writeText(tsv);
+      });
+    } catch {
+      navigator.clipboard.writeText(tsv);
+    }
+
+    setCopied13Table(true);
+    setTimeout(() => setCopied13Table(false), 2000);
   };
 
   // Week 13 indicators & grouped SCN
@@ -838,13 +947,44 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
             </div>
           </div>
 
-          {/* MỤC 2: TỔNG HỢP VẤN ĐỀ HỌC SINH TRONG TUẦN (13 CHỈ SỐ) */}
+          {/* MỤC 2: TỔNG HỢP VẤN ĐỀ HỌC SINH TRONG TUẦN (13 CHỈ SỐ THEO DÕI) */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-              <span className="w-2.5 h-6 bg-indigo-600 rounded-full inline-block"></span>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase">
-                MỤC 2: TỔNG HỢP VẤN ĐỀ HỌC SINH TRONG TUẦN (13 CHỈ SỐ)
-              </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-6 bg-indigo-600 rounded-full inline-block"></span>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+                  MỤC 2: TỔNG HỢP VẤN ĐỀ HỌC SINH TRONG TUẦN (13 CHỈ SỐ THEO DÕI)
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  Bộ đếm chuẩn 13 chỉ số
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopy13Indicators(weekIndicators)}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs ${
+                    copied13Table
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+                  title="Sao chép toàn bộ nội dung của Bảng 13 chỉ số dưới dạng bảng HTML/Tab-delimited text để dán trực tiếp vào Excel hoặc Word"
+                >
+                  {copied13Table ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-white" />
+                      <span>✓ Đã sao chép bảng!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>📋 Sao chép bảng (Excel/Word)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -852,22 +992,31 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3 w-14 text-center">STT</th>
-                    <th className="py-2.5 px-4 w-64">Nội dung theo dõi</th>
-                    <th className="py-2.5 px-3 w-28 text-center">Số lượng</th>
-                    <th className="py-2.5 px-4">Chi tiết học sinh &amp; thời điểm ghi nhận</th>
+                    <th className="py-2.5 px-4 w-60">Chỉ số vi phạm</th>
+                    <th className="py-2.5 px-4">Danh sách học sinh &amp; Số lần</th>
+                    <th className="py-2.5 px-3 w-28 text-center">Tổng số lượt</th>
+                    <th className="py-2.5 px-3 w-28 text-center">Điểm trừ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {weekIndicators.map((ind) => (
-                    <tr key={ind.index} className="hover:bg-slate-50 transition">
-                      <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-500">{ind.index}</td>
-                      <td className="py-2.5 px-4 font-semibold text-slate-900">{ind.title}</td>
-                      <td className="py-2.5 px-3 text-center font-black">
-                        <span className={ind.count > 0 ? 'text-blue-700' : 'text-slate-400'}>{ind.count}</span>
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-700">{ind.details}</td>
-                    </tr>
-                  ))}
+                  {weekIndicators.map((ind) => {
+                    const points = getIndicatorDeduction(ind);
+                    return (
+                      <tr key={ind.index} className="hover:bg-slate-50 transition">
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-500">{ind.index}</td>
+                        <td className="py-2.5 px-4 font-semibold text-slate-900">{ind.title}</td>
+                        <td className="py-2.5 px-4 text-slate-700">{ind.details}</td>
+                        <td className="py-2.5 px-3 text-center font-black">
+                          <span className={ind.count > 0 ? 'text-blue-700' : 'text-slate-400'}>{ind.count}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold">
+                          <span className={points.startsWith('-') ? 'text-rose-600' : points.startsWith('+') ? 'text-emerald-600' : 'text-slate-400'}>
+                            {points}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -948,8 +1097,17 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                   onClick={() => handleCopySCNTable(weekGroupedScn)}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
                 >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{copiedSection === 'scn' ? 'Đã sao chép!' : 'Sao chép bảng SCN'}</span>
+                  {copiedSection === 'scn' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">✓ Đã sao chép bảng!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Sao chép bảng SCN (Excel/Word)</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -987,6 +1145,70 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* MỤC 5: BIÊN BẢN & KẾ HOẠCH SINH HOẠT LỚP TUẦN */}
+          <div className="space-y-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-6 bg-cyan-600 rounded-full inline-block"></span>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+                  MỤC 5: BIÊN BẢN &amp; TRỌNG TÂM SINH HOẠT LỚP (TUẦN {activeReport.weekNumber})
+                </h2>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                Lớp {profile.className} • Năm học {profile.academicYear}
+              </span>
+            </div>
+
+            {/* Ban Điều Hành Sinh Hoạt (Hiển thị linh hoạt nếu có cấu hình, để trống nếu chưa nhập) */}
+            {(profile.officers?.classLeader || profile.officers?.viceLeader || profile.officers?.groupLeader1) && (
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
+                  Ban Điều Hành Tiết Sinh Hoạt:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs text-slate-700">
+                  {profile.officers.classLeader && (
+                    <div className="p-2 bg-white rounded-lg border border-slate-200">
+                      <span className="text-slate-500 font-medium block text-[11px]">Chủ tọa điều hành:</span>
+                      <strong className="text-slate-900">{profile.officers.classLeader}</strong> (Lớp trưởng)
+                    </div>
+                  )}
+                  {profile.officers.viceLeader && (
+                    <div className="p-2 bg-white rounded-lg border border-slate-200">
+                      <span className="text-slate-500 font-medium block text-[11px]">Thư ký ghi biên bản:</span>
+                      <strong className="text-slate-900">{profile.officers.viceLeader}</strong> (Lớp phó)
+                    </div>
+                  )}
+                  {(profile.officers.groupLeader1 || profile.officers.groupLeader2 || profile.officers.groupLeader3 || profile.officers.groupLeader4) && (
+                    <div className="p-2 bg-white rounded-lg border border-slate-200">
+                      <span className="text-slate-500 font-medium block text-[11px]">Tổ trưởng 4 tổ:</span>
+                      <span>
+                        T1: {profile.officers.groupLeader1 || '—'} • T2: {profile.officers.groupLeader2 || '—'} • T3: {profile.officers.groupLeader3 || '—'} • T4: {profile.officers.groupLeader4 || '—'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Trọng tâm nội dung sinh hoạt lớp */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
+                Nội dung trọng tâm triển khai:
+              </span>
+              <ul className="space-y-1.5 text-xs text-slate-700 list-disc pl-5">
+                {(activeReport.tt22Forecast?.homeroomFocusPoints || [
+                  'Sơ kết thi đua tuần, biểu dương các bạn có hoa điểm tốt và nề nếp gương mẫu.',
+                  'Chấn chỉnh các trường hợp đi muộn, chưa mang đủ SGK/vở bài tập theo ghi nhận SCN.',
+                  'Phổ biến kế hoạch học tập và các hoạt động Đội tuần kế tiếp.',
+                ]).map((pt, idx) => (
+                  <li key={idx} className="leading-relaxed font-medium">
+                    {pt}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
@@ -1217,8 +1439,17 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                   onClick={() => handleCopySCNTable(monthData.groupedMonthScn)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
                 >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Sao chép bảng</span>
+                  {copiedSection === 'scn' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">✓ Đã sao chép bảng!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Sao chép bảng (Excel/Word)</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

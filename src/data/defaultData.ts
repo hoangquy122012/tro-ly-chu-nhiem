@@ -824,6 +824,14 @@ export const DEFAULT_SYSTEM_PROFILE: SystemProfile = {
   teacherTitle: 'Cô',
   teacherPhone: '0978057875',
   alertThreshold: 3,
+  officers: {
+    classLeader: 'Nguyễn An Khang',
+    viceLeader: 'Trần Bảo Ngọc',
+    groupLeader1: 'Lê Hoàng Long',
+    groupLeader2: 'Vũ Minh Anh',
+    groupLeader3: 'Phạm Đức Trọng',
+    groupLeader4: 'Đỗ Thùy Trang',
+  },
   template1Monthly: `Dạ kính gửi phụ huynh em {ten_hoc_sinh}. {xung_ho_gv} chủ nhiệm lớp {lop} xin gửi lời chào gia đình ạ.
 Trong tháng vừa qua, nhìn chung em vẫn duy trì việc đến lớp đầy đủ. Tuy nhiên, về mặt nề nếp và học tập, em có tích lũy {so_luot_loi} lần thầy cô bộ môn nhắc nhở ghi sổ:
 {danh_sach_loi_chi_tiet_ngay_tiet_mon}
@@ -837,7 +845,7 @@ Trong tuần này, em {ten_hoc_sinh} đã có sự cố gắng rất đáng khen
 {xung_ho_gv} gửi lời tuyên dương em trước lớp và báo tin vui để gia đình cùng động viên, khích lệ em tiếp tục phát huy trong thời gian tới. Cảm ơn sự đồng hành quý báu của gia đình!`,
 };
 
-export const SAMPLE_OCR_SDB_TEXT = `SỔ ĐẦU BÀI & SỔ TRỰC SAO ĐỎ - LỚP 7A1 - TUẦN 4 (THÁNG 9/2026)
+export const SAMPLE_OCR_SDB_TEXT = `SỔ ĐẦU BÀI & SỔ TRỰC SAO ĐỎ - LỚP 9.5 - TUẦN 4 (THÁNG 9/2026)
 
 I. GHI NHẬN TỪ SỔ SAO ĐỎ / LIÊN ĐỘI (LUỒNG THI ĐUA TẬP THỂ LỚP):
 - Thứ Hai (21/09): Lớp tập trung đầu tuần đúng giờ, trang phục nghiêm túc.

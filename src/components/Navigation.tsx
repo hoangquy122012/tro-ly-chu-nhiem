@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, FileSpreadsheet, Users, Award, SlidersHorizontal, Cloud } from 'lucide-react';
+import { Camera, FileSpreadsheet, Users, Award, SlidersHorizontal, Database } from 'lucide-react';
 
 export type ActiveTab = 'ocr' | 'report' | 'roster' | 'tt22' | 'barem' | 'drive';
 
@@ -45,8 +45,8 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'drive' as ActiveTab,
-      label: 'Google Drive Sync',
-      icon: Cloud,
+      label: 'Cơ sở Dữ liệu Cloud (Supabase)',
+      icon: Database,
     },
   ];
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { Header } from './components/Header';
 import { Navigation, ActiveTab } from './components/Navigation';
@@ -8,8 +8,24 @@ import { StudentRosterTab } from './components/Tabs/StudentRosterTab';
 import { TT22EvaluationTab } from './components/Tabs/TT22EvaluationTab';
 import { FlexibleBaremTab } from './components/Tabs/FlexibleBaremTab';
 import { GoogleDriveTab } from './components/Tabs/GoogleDriveTab';
-import { initAuth, getAccessToken, setCachedAccessToken } from './services/firebaseAuth';
-import { saveFileToDrive } from './services/googleDriveService';
+import {
+  initAuth,
+  getAccessToken,
+  setCachedAccessToken,
+  getStoredAuthState,
+  saveAuthState,
+  clearStoredAuthState,
+} from './services/firebaseAuth';
+import {
+  saveFileToDrive,
+  syncClassDataToDrive,
+  restoreClassDataFromDrive,
+} from './services/googleDriveService';
+import {
+  formatClassId,
+  fetchClassDataFromSupabase,
+  saveClassDataToSupabase,
+} from './services/supabaseClient';
 import {
   DEFAULT_STUDENTS,
   DEFAULT_BAREM_RULES,
@@ -23,27 +39,82 @@ import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { ResetDataModal } from './components/ResetDataModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 
+export const CLASS_DATA_STORAGE_KEY = 'edumaster_class_data';
+
+export interface ClassDataStorage {
+  profile: SystemProfile;
+  students: Student[];
+  baremRules: BaremRule[];
+  records: BehaviorRecord[];
+  reports: WeeklyReport[];
+  activeWeek: number;
+  currentMonth: number;
+  currentSemester: 1 | 2;
+  lastUpdated?: string;
+}
+
+const loadSavedClassData = (): ClassDataStorage | null => {
+  try {
+    const raw = localStorage.getItem(CLASS_DATA_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch (err) {
+    console.warn('Lỗi khi đọc dữ liệu lưu trữ từ localStorage:', err);
+  }
+  return null;
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('report');
-  const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  // Khôi phục dữ liệu đã lưu trữ từ localStorage trước tiên (nếu có)
+  const initialClassData = loadSavedClassData();
+  const initialAuth = getStoredAuthState();
+
+  // Auth States (Khôi phục ngay lập tức từ edumaster_auth_state khi F5)
+  const [user, setUser] = useState<User | any | null>(() => initialAuth?.user || null);
+  const [accessToken, setAccessToken] = useState<string | null>(() => initialAuth?.accessToken || null);
 
   // System Profile State
-  const [profile, setProfile] = useState<SystemProfile>(DEFAULT_SYSTEM_PROFILE);
+  const [profile, setProfile] = useState<SystemProfile>(
+    () => initialClassData?.profile || DEFAULT_SYSTEM_PROFILE
+  );
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
-  // Application Data States
-  const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
-  const [baremRules, setBaremRules] = useState<BaremRule[]>(DEFAULT_BAREM_RULES);
-  const [records, setRecords] = useState<BehaviorRecord[]>(INITIAL_BEHAVIOR_RECORDS);
-  const [reports, setReports] = useState<WeeklyReport[]>(DEFAULT_REPORTS);
-  const [activeWeek, setActiveWeek] = useState<number>(3);
-  const [currentMonth, setCurrentMonth] = useState<number>(9);
-  const [currentSemester, setCurrentSemester] = useState<1 | 2>(1);
+  // Application Data States (Bảo lưu 100% khi tải lại trang F5)
+  const [students, setStudents] = useState<Student[]>(() =>
+    initialClassData?.students && initialClassData.students.length > 0
+      ? initialClassData.students
+      : DEFAULT_STUDENTS
+  );
+  const [baremRules, setBaremRules] = useState<BaremRule[]>(() =>
+    initialClassData?.baremRules && initialClassData.baremRules.length > 0
+      ? initialClassData.baremRules
+      : DEFAULT_BAREM_RULES
+  );
+  const [records, setRecords] = useState<BehaviorRecord[]>(() =>
+    initialClassData?.records !== undefined ? initialClassData.records : INITIAL_BEHAVIOR_RECORDS
+  );
+  const [reports, setReports] = useState<WeeklyReport[]>(() =>
+    initialClassData?.reports && initialClassData.reports.length > 0
+      ? initialClassData.reports
+      : DEFAULT_REPORTS
+  );
+  const [activeWeek, setActiveWeek] = useState<number>(() => initialClassData?.activeWeek ?? 3);
+  const [currentMonth, setCurrentMonth] = useState<number>(() => initialClassData?.currentMonth ?? 9);
+  const [currentSemester, setCurrentSemester] = useState<1 | 2>(() => initialClassData?.currentSemester ?? 1);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
 
-  // Operation States
+  // Operation States & Supabase Cloud Sync
   const [isExportingToDrive, setIsExportingToDrive] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'idle' | 'error'>('synced');
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
 
   const showToast = (text: string, type: 'success' | 'info' = 'success') => {
@@ -51,16 +122,131 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // 1. TỰ ĐỘNG LƯU NGẦM VÀO LOCALSTORAGE:
+  // Bất kỳ khi nào có sự thay đổi về hồ sơ lớp, danh sách học sinh, barem điểm, số liệu các tuần, nhật ký SCN
+  // -> Ghi đè ngay vào localStorage dưới key: 'edumaster_class_data'
   useEffect(() => {
-    // Listen for Firebase Auth state changes
+    try {
+      const dataToSave: ClassDataStorage = {
+        profile,
+        students,
+        baremRules,
+        records,
+        reports,
+        activeWeek,
+        currentMonth,
+        currentSemester,
+        lastUpdated: new Date().toISOString(),
+      };
+      localStorage.setItem(CLASS_DATA_STORAGE_KEY, JSON.stringify(dataToSave));
+    } catch (err) {
+      console.error('Lỗi khi tự động lưu dữ liệu vào localStorage:', err);
+    }
+  }, [profile, students, baremRules, records, reports, activeWeek, currentMonth, currentSemester]);
+
+  // 2. KHỞI ĐỘNG: TỰ ĐỘNG TRUY VẤN SUPABASE CLOUD (LẤY DỮ LIỆU BẢNG 'class_records')
+  useEffect(() => {
+    let isMounted = true;
+    const syncFromSupabaseOnMount = async () => {
+      try {
+        const classId = formatClassId(profile.className);
+        setSyncStatus('syncing');
+        const cloudData = await fetchClassDataFromSupabase(classId);
+        if (!isMounted) return;
+
+        if (cloudData && typeof cloudData === 'object') {
+          if (cloudData.profile) setProfile(cloudData.profile);
+          if (Array.isArray(cloudData.students) && cloudData.students.length > 0) setStudents(cloudData.students);
+          if (Array.isArray(cloudData.baremRules) && cloudData.baremRules.length > 0) setBaremRules(cloudData.baremRules);
+          if (Array.isArray(cloudData.records)) setRecords(cloudData.records);
+          if (Array.isArray(cloudData.reports) && cloudData.reports.length > 0) setReports(cloudData.reports);
+          if (typeof cloudData.activeWeek === 'number') setActiveWeek(cloudData.activeWeek);
+          if (typeof cloudData.currentMonth === 'number') setCurrentMonth(cloudData.currentMonth);
+          if (cloudData.currentSemester === 1 || cloudData.currentSemester === 2) setCurrentSemester(cloudData.currentSemester);
+
+          // Đồng thời lưu dự phòng vào LocalStorage
+          localStorage.setItem(CLASS_DATA_STORAGE_KEY, JSON.stringify({
+            profile: cloudData.profile || profile,
+            students: cloudData.students || students,
+            baremRules: cloudData.baremRules || baremRules,
+            records: cloudData.records || records,
+            reports: cloudData.reports || reports,
+            activeWeek: cloudData.activeWeek ?? activeWeek,
+            currentMonth: cloudData.currentMonth ?? currentMonth,
+            currentSemester: cloudData.currentSemester ?? currentSemester,
+            lastUpdated: new Date().toISOString(),
+          }));
+        }
+        setSyncStatus('synced');
+        const now = new Date();
+        setLastSyncedTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+      } catch (err) {
+        console.warn('Lỗi kết nối Supabase Cloud khi mở trang:', err);
+        setSyncStatus('error');
+      }
+    };
+
+    syncFromSupabaseOnMount();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 3. TỰ ĐỘNG ĐỒNG BỘ ĐÁM MÂY SUPABASE KHI CÓ BẤT KỲ THAY ĐỔI NÀO (DEBOUNCED UPSERT)
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setSyncStatus('syncing');
+    const timer = setTimeout(async () => {
+      try {
+        const classId = formatClassId(profile.className);
+        const dataPackage: ClassDataStorage = {
+          profile,
+          students,
+          baremRules,
+          records,
+          reports,
+          activeWeek,
+          currentMonth,
+          currentSemester,
+          lastUpdated: new Date().toISOString(),
+        };
+        await saveClassDataToSupabase(classId, dataPackage);
+        setSyncStatus('synced');
+        const now = new Date();
+        setLastSyncedTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+      } catch (err) {
+        console.warn('Lỗi tự động sao lưu lên Supabase Cloud:', err);
+        setSyncStatus('error');
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [profile, students, baremRules, records, reports, activeWeek, currentMonth, currentSemester]);
+
+  // DUY TRÌ TRẠNG THÁI KẾT NỐI AUTH
+  useEffect(() => {
     const unsubscribe = initAuth(
       (currentUser, token) => {
         setUser(currentUser);
         setAccessToken(token);
+        setCachedAccessToken(token);
+        saveAuthState(currentUser, token);
       },
       () => {
-        setUser(null);
-        setAccessToken(null);
+        const stored = getStoredAuthState();
+        if (stored?.accessToken && stored?.user) {
+          setUser(stored.user);
+          setAccessToken(stored.accessToken);
+          setCachedAccessToken(stored.accessToken);
+        } else {
+          setUser(null);
+          setAccessToken(null);
+        }
       }
     );
 
@@ -73,10 +259,75 @@ export default function App() {
     setUser(newUser);
     setAccessToken(token);
     setCachedAccessToken(token);
+    saveAuthState(newUser, token);
     if (newUser && token) {
       showToast('Đã kết nối thành công với Google Drive!');
     } else {
       showToast('Đã đăng xuất tài khoản Google Drive.', 'info');
+    }
+  };
+
+  // Đồng bộ thủ công ngay lập tức lên Supabase Cloud
+  const handleManualSyncToSupabase = async () => {
+    try {
+      setSyncStatus('syncing');
+      showToast('🔄 Đang lưu lên Supabase Cloud...', 'info');
+      const classId = formatClassId(profile.className);
+      const dataPackage: ClassDataStorage = {
+        profile,
+        students,
+        baremRules,
+        records,
+        reports,
+        activeWeek,
+        currentMonth,
+        currentSemester,
+        lastUpdated: new Date().toISOString(),
+      };
+      await saveClassDataToSupabase(classId, dataPackage);
+      setSyncStatus('synced');
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      setLastSyncedTime(timeStr);
+      showToast(`🟢 Supabase Cloud: Đã đồng bộ [${timeStr}]`);
+    } catch (err) {
+      setSyncStatus('error');
+      showToast('⚠️ Lỗi kết nối Supabase Cloud. Dữ liệu đã lưu an toàn vào LocalStorage.', 'info');
+    }
+  };
+
+  // Tải lại toàn bộ dữ liệu từ Supabase Cloud
+  const handleRestoreFromSupabase = async () => {
+    try {
+      setSyncStatus('syncing');
+      showToast('🔄 Đang tải lại dữ liệu từ Supabase Cloud...', 'info');
+      const classId = formatClassId(profile.className);
+      const cloudData = await fetchClassDataFromSupabase(classId);
+
+      if (!cloudData) {
+        showToast(`Chưa có dữ liệu lớp ${profile.className} trên Cloud. Đang khởi tạo bản sao lưu...`, 'info');
+        await handleManualSyncToSupabase();
+        return;
+      }
+
+      if (cloudData.profile) setProfile(cloudData.profile);
+      if (Array.isArray(cloudData.students) && cloudData.students.length > 0) setStudents(cloudData.students);
+      if (Array.isArray(cloudData.baremRules) && cloudData.baremRules.length > 0) setBaremRules(cloudData.baremRules);
+      if (Array.isArray(cloudData.records)) setRecords(cloudData.records);
+      if (Array.isArray(cloudData.reports) && cloudData.reports.length > 0) setReports(cloudData.reports);
+      if (typeof cloudData.activeWeek === 'number') setActiveWeek(cloudData.activeWeek);
+      if (typeof cloudData.currentMonth === 'number') setCurrentMonth(cloudData.currentMonth);
+      if (cloudData.currentSemester === 1 || cloudData.currentSemester === 2) setCurrentSemester(cloudData.currentSemester);
+
+      localStorage.setItem(CLASS_DATA_STORAGE_KEY, JSON.stringify(cloudData));
+      setSyncStatus('synced');
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      setLastSyncedTime(timeStr);
+      showToast(`🟢 Khôi phục thành công toàn bộ dữ liệu từ Supabase Cloud [${timeStr}]!`);
+    } catch (err: any) {
+      setSyncStatus('error');
+      showToast('Không thể kết nối Supabase Cloud. Đã giữ nguyên dữ liệu hiện tại.', 'info');
     }
   };
 
@@ -98,7 +349,7 @@ export default function App() {
 
   const handleAddStudent = (newStudent: Student) => {
     setStudents((prev) => [...prev, newStudent]);
-    showToast(`Đã thêm học sinh ${newStudent.name} vào danh sách lớp 7A1!`);
+    showToast(`Đã thêm học sinh ${newStudent.name} vào danh sách lớp ${profile.className}!`);
   };
 
   const handleUpdateStudent = (updatedStudent: Student) => {
@@ -293,9 +544,11 @@ export default function App() {
 
     setIsExportingToDrive(true);
     try {
-      const fileName = `EduMaster_BaoCao_Tuan_${activeReport.weekNumber}_Lop7A1.txt`;
+      const cleanClass = profile.className.replace(/[^a-zA-Z0-9]/g, '') || '95';
+      const displayClass = profile.className.startsWith('Lớp') ? profile.className : `Lớp ${profile.className}`;
+      const fileName = `EduMaster_BaoCao_Tuan_${activeReport.weekNumber}_${cleanClass}.txt`;
       let content = `# BÁO CÁO CÔNG TÁC CHỦ NHIỆM - TUẦN ${activeReport.weekNumber}\n`;
-      content += `Lớp 7A1 • Năm học ${activeReport.academicYear} • Học kỳ ${activeReport.semester}\nThời gian: ${activeReport.dateRange}\n\n`;
+      content += `${displayClass} • Năm học ${activeReport.academicYear} • Học kỳ ${activeReport.semester}\nThời gian: ${activeReport.dateRange}\n\n`;
       const indicators = activeReport.studentProblemsSummary?.indicators13 || activeReport.indicators || [];
       content += `## MỤC 1: BẢNG SƠ KẾT THI ĐUA TUẦN (13 CHỈ SỐ)\n`;
       indicators.forEach((i) => {
@@ -332,18 +585,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans flex flex-col">
-      {/* App Header */}
+      {/* App Header with Supabase Cloud Status */}
       <Header
-        user={user}
-        hasDriveToken={!!accessToken}
-        onDriveAuthChange={handleDriveAuthChange}
-        onExportToDrive={handleQuickSaveToDrive}
-        isExporting={isExportingToDrive}
         currentMonth={currentMonth}
         currentSemester={currentSemester}
         onOpenResetModal={() => setIsResetModalOpen(true)}
         profile={profile}
         onOpenProfileSettings={() => setIsProfileModalOpen(true)}
+        syncStatus={syncStatus}
+        lastSyncedTime={lastSyncedTime}
+        onManualSync={handleManualSyncToSupabase}
       />
 
       {/* Main Tab Navigation */}
@@ -397,6 +648,7 @@ export default function App() {
         {activeTab === 'barem' && (
           <FlexibleBaremTab
             baremRules={baremRules}
+            className={profile.className}
             onUpdateBarem={(newRules) => {
               setBaremRules(newRules);
               showToast('Đã lưu quy tắc Barem điểm thi đua mới!');
@@ -407,13 +659,14 @@ export default function App() {
 
         {activeTab === 'drive' && (
           <GoogleDriveTab
-            user={user}
-            hasDriveToken={!!accessToken}
-            accessToken={accessToken}
-            onDriveAuthChange={handleDriveAuthChange}
             activeReport={activeReport}
             allReports={reports}
             students={students}
+            className={profile.className}
+            syncStatus={syncStatus}
+            lastSyncedTime={lastSyncedTime}
+            onRestoreFromCloud={handleRestoreFromSupabase}
+            onManualSync={handleManualSyncToSupabase}
           />
         )}
       </main>
@@ -428,6 +681,7 @@ export default function App() {
         currentWeek={activeWeek}
         currentMonth={currentMonth}
         currentSemester={currentSemester}
+        className={profile.className}
         onExecuteMonthReset={handleExecuteMonthReset}
         onExecuteSemesterReset={handleExecuteSemesterReset}
         onExecuteCorrection={handleExecuteCorrection}
@@ -439,6 +693,11 @@ export default function App() {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         profile={profile}
+        students={students}
+        onUpdateStudents={(newStudents) => {
+          setStudents(newStudents);
+          showToast(`Đã cập nhật danh sách ${newStudents.length} học sinh cho Lớp ${profile.className}!`);
+        }}
         onSaveProfile={(newProf) => {
           setProfile(newProf);
           showToast(`Đã lưu cấu hình hồ sơ và mẫu tin nhắn cho Lớp ${newProf.className}!`);

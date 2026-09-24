@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   User,
@@ -13,8 +13,12 @@ import {
   AlertTriangle,
   Sliders,
   Send,
+  Users,
+  UserCheck,
+  ClipboardList,
+  Info,
 } from 'lucide-react';
-import { SystemProfile } from '../types';
+import { SystemProfile, Student } from '../types';
 import { DEFAULT_SYSTEM_PROFILE } from '../data/defaultData';
 
 interface ProfileSettingsModalProps {
@@ -22,6 +26,8 @@ interface ProfileSettingsModalProps {
   onClose: () => void;
   profile: SystemProfile;
   onSaveProfile: (newProfile: SystemProfile) => void;
+  students?: Student[];
+  onUpdateStudents?: (newStudents: Student[]) => void;
 }
 
 export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
@@ -29,21 +35,136 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   onClose,
   profile,
   onSaveProfile,
+  students = [],
+  onUpdateStudents,
 }) => {
   const [formData, setFormData] = useState<SystemProfile>(profile);
-  const [activeTab, setActiveTab] = useState<'profile' | 'templates' | 'command'>('profile');
+  const [currentStudents, setCurrentStudents] = useState<Student[]>(students);
+  const [activeTab, setActiveTab] = useState<'class' | 'profile' | 'templates' | 'command'>('class');
   const [commandInput, setCommandInput] = useState<string>('');
   const [commandFeedback, setCommandFeedback] = useState<string | null>(null);
+
+  // Quick paste roster state
+  const [pasteRosterInput, setPasteRosterInput] = useState<string>('');
+  const [pasteFeedback, setPasteFeedback] = useState<string | null>(null);
+
+  // Sync with prop changes if modal reopens
+  useEffect(() => {
+    setFormData(profile);
+  }, [profile]);
+
+  useEffect(() => {
+    setCurrentStudents(students);
+  }, [students]);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
     onSaveProfile(formData);
+    if (onUpdateStudents && currentStudents !== students) {
+      onUpdateStudents(currentStudents);
+    }
     onClose();
   };
 
   const handleResetDefaults = () => {
     setFormData(DEFAULT_SYSTEM_PROFILE);
+  };
+
+  // Quick paste parser for student roster
+  const handleParsePastedRoster = () => {
+    if (!pasteRosterInput.trim()) return;
+
+    const lines = pasteRosterInput.split('\n').map((l) => l.trim()).filter(Boolean);
+    const parsed: Student[] = [];
+
+    lines.forEach((line, index) => {
+      // Formats:
+      // "1. Nguyễn An Khang - Tổ 1"
+      // "1\tNguyễn An Khang\t1"
+      // "Nguyễn An Khang, Tổ 2"
+      // "1  Nguyễn An Khang  Nam  1"
+      let stt = index + 1;
+      let name = line;
+      let group = ((index % 4) + 1); // default distribution 1, 2, 3, 4
+      let gender: 'Nam' | 'Nữ' = 'Nam';
+      let role: any = 'Học sinh';
+
+      // Check group match (e.g. "Tổ 1", "Tổ 2", or last number)
+      const groupMatch = line.match(/(?:tổ|to|group|nhóm)\s*([1-4])/i);
+      if (groupMatch && groupMatch[1]) {
+        group = parseInt(groupMatch[1], 10);
+      }
+
+      // Check tab or comma or dash separated
+      if (line.includes('\t')) {
+        const parts = line.split('\t').map((p) => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          const firstNum = parseInt(parts[0], 10);
+          if (!isNaN(firstNum)) {
+            stt = firstNum;
+            name = parts[1];
+            if (parts.length >= 3) {
+              const lastNum = parseInt(parts[2], 10);
+              if (!isNaN(lastNum) && lastNum >= 1 && lastNum <= 4) group = lastNum;
+            }
+          } else {
+            name = parts[0];
+          }
+        }
+      } else {
+        // Regex: (optional stt like "1." or "1 -") then (name) then (optional "- Tổ X")
+        const match = line.match(/^(?:(\d+)[\s.,\-_)]+)?(.*?)(?:[\s,\-_|]+(?:tổ|to|group|nhóm)?\s*([1-4]))?$/i);
+        if (match) {
+          if (match[1]) stt = parseInt(match[1], 10);
+          if (match[2]) name = match[2].trim();
+          if (match[3]) group = parseInt(match[3], 10);
+        }
+      }
+
+      // Clean name
+      name = name.replace(/^(?:STT|\d+)[\s.:\-_]+/i, '')
+                 .replace(/[\s,\-_|]+(?:Tổ|to)\s*[1-4]$/i, '')
+                 .replace(/[\s,\-_|]+(?:Nam|Nữ)$/i, '')
+                 .trim();
+
+      if (name.length > 1) {
+        parsed.push({
+          id: `hs_${Date.now()}_${index}`,
+          stt,
+          name,
+          gender,
+          group,
+          role,
+        });
+      }
+    });
+
+    if (parsed.length > 0) {
+      setCurrentStudents(parsed);
+      if (onUpdateStudents) {
+        onUpdateStudents(parsed);
+      }
+      setPasteFeedback(`✓ Đã nạp thành công ${parsed.length} học sinh! Sĩ số lớp tự động đếm: ${parsed.length} em.`);
+      setPasteRosterInput('');
+      setTimeout(() => setPasteFeedback(null), 5000);
+    } else {
+      setPasteFeedback('Không nhận diện được học sinh nào từ văn bản đã dán. Vui lòng kiểm tra lại định dạng.');
+    }
+  };
+
+  const handleClearOfficers = () => {
+    setFormData({
+      ...formData,
+      officers: {
+        classLeader: '',
+        viceLeader: '',
+        groupLeader1: '',
+        groupLeader2: '',
+        groupLeader3: '',
+        groupLeader4: '',
+      },
+    });
   };
 
   // Natural language command parser for quick profile & template adjustments
@@ -155,6 +276,18 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
         {/* Tab Selector */}
         <div className="bg-slate-100 p-2 border-b border-slate-200 flex flex-wrap gap-1.5 text-xs font-bold">
           <button
+            onClick={() => setActiveTab('class')}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+              activeTab === 'class'
+                ? 'bg-white text-blue-800 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-blue-600" />
+            <span>Phần 1: Cấu hình Lớp &amp; Ban Cán Sự</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('profile')}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
               activeTab === 'profile'
@@ -162,8 +295,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <User className="w-3.5 h-3.5 text-blue-600" />
-            <span>Phần 1: Hồ Sơ Giáo Viên &amp; Lớp Học</span>
+            <User className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Phần 2: Hồ Sơ GVCN &amp; Trường</span>
           </button>
 
           <button
@@ -175,7 +308,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Phần 2: 3 Mẫu Tin Nhắn Phụ Huynh</span>
+            <span>Phần 3: 3 Mẫu Tin Nhắn Phụ Huynh</span>
           </button>
 
           <button
@@ -187,13 +320,252 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Phần 3: Lệnh Điều Chỉnh Nhanh</span>
+            <span>Phần 4: Lệnh Điều Chỉnh Nhanh</span>
           </button>
         </div>
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* TAB 1: PROFILE */}
+          {/* TAB 1: CẤU HÌNH LỚP HỌC & BAN CÁN SỰ */}
+          {activeTab === 'class' && (
+            <div className="space-y-6 text-xs">
+              {/* PHẦN 1.1: THÔNG TIN LỚP HỌC & SĨ SỐ */}
+              <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <span className="w-2.5 h-4 bg-blue-600 rounded-full inline-block"></span>
+                  <h3 className="font-bold text-slate-900 uppercase tracking-wide">
+                    1. Thông tin Lớp học &amp; Sĩ số
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Tên Lớp (&#123;lop&#125;):
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.className}
+                      onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
+                      placeholder="VD: 9.5 hoặc 8A2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Năm học (&#123;nam_hoc&#125;):
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.academicYear}
+                      onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
+                      placeholder="VD: 2026 - 2027"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Sĩ số lớp (Tự động đếm):
+                    </label>
+                    <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg flex items-center justify-between text-blue-900 font-bold">
+                      <span className="text-base text-blue-700">{currentStudents.length} học sinh</span>
+                      <span className="text-[10px] bg-blue-200/70 text-blue-950 px-2 py-0.5 rounded-full font-medium">
+                        Tự động đếm
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* PHẦN 1.2: KHU VỰC DANH SÁCH HỌC SINH (DÁN NHANH) */}
+              <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4 text-indigo-600" />
+                    <h3 className="font-bold text-slate-900 uppercase tracking-wide">
+                      2. Khu vực Danh sách học sinh (Dán nhanh STT, Họ tên, Phân tổ)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Hiện có: <strong>{currentStudents.length} học sinh</strong>
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    GVCN có thể sao chép nhanh cột STT, Họ tên, Phân tổ từ Excel hoặc dán danh sách theo định dạng:
+                    <code className="text-blue-700 bg-blue-50 px-1 py-0.5 rounded ml-1 font-mono">1. Nguyễn An Khang - Tổ 1</code>
+                  </p>
+
+                  <textarea
+                    rows={4}
+                    value={pasteRosterInput}
+                    onChange={(e) => setPasteRosterInput(e.target.value)}
+                    placeholder={`Dán danh sách học sinh tại đây (mỗi em một dòng):\n1. Nguyễn An Khang - Tổ 1\n2. Trần Bảo Ngọc - Tổ 1\n3. Lê Hoàng Long - Tổ 2\n4. Vũ Minh Anh - Tổ 2\n... hoặc paste trực tiếp các cột từ Excel`}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleParsePastedRoster}
+                      disabled={!pasteRosterInput.trim()}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition disabled:opacity-50"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      <span>⚡ Nạp &amp; Cập Nhật Danh Sách Học Sinh</span>
+                    </button>
+
+                    {pasteFeedback && (
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                        {pasteFeedback}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* PHẦN 1.3: KHU VỰC BAN CÁN SỰ (KHÔNG BẮT BUỘC) */}
+              <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-600" />
+                    <h3 className="font-bold text-slate-900 uppercase tracking-wide">
+                      3. Khu vực Ban Cán Sự Lớp (Linh hoạt - Không bắt buộc)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearOfficers}
+                    className="text-[11px] text-slate-500 hover:text-rose-600 underline transition"
+                  >
+                    Xóa trắng Ban cán sự
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-[11px] leading-relaxed flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Lưu ý:</strong> Thông tin Ban cán sự <em>cho phép để trống</em>. Nếu GVCN không nhập thông tin, hệ thống vẫn vận hành bình thường, không báo lỗi và tự động ẩn hoặc để trống phần người điều hành khi sinh biên bản sinh hoạt lớp.
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Lớp trưởng:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.officers?.classLeader || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          officers: { ...formData.officers, classLeader: e.target.value },
+                        })
+                      }
+                      placeholder="Để trống nếu chưa bầu"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Lớp phó:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.officers?.viceLeader || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          officers: { ...formData.officers, viceLeader: e.target.value },
+                        })
+                      }
+                      placeholder="Để trống nếu chưa bầu"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Tổ trưởng Tổ 1:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.officers?.groupLeader1 || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          officers: { ...formData.officers, groupLeader1: e.target.value },
+                        })
+                      }
+                      placeholder="Để trống nếu chưa bầu"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Tổ trưởng Tổ 2:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.officers?.groupLeader2 || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          officers: { ...formData.officers, groupLeader2: e.target.value },
+                        })
+                      }
+                      placeholder="Để trống nếu chưa bầu"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Tổ trưởng Tổ 3:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.officers?.groupLeader3 || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          officers: { ...formData.officers, groupLeader3: e.target.value },
+                        })
+                      }
+                      placeholder="Để trống nếu chưa bầu"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Tổ trưởng Tổ 4:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.officers?.groupLeader4 || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          officers: { ...formData.officers, groupLeader4: e.target.value },
+                        })
+                      }
+                      placeholder="Để trống nếu chưa bầu"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: PROFILE */}
           {activeTab === 'profile' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
