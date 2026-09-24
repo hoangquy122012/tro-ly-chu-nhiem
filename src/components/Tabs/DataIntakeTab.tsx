@@ -20,6 +20,7 @@ import {
 import { Student, BaremRule, BehaviorRecord, WeeklyReport } from '../../types';
 import { SAMPLE_OCR_SDB_TEXT } from '../../data/defaultData';
 import { detectWeekFromScannedContent, getWeekCycleInfo, SCHOOL_YEAR_WEEKS } from '../../utils/timeCycle';
+import { getStoredGeminiApiKey, hasGeminiApiKey } from '../../utils/geminiApiKey';
 
 interface DataIntakeTabProps {
   students: Student[];
@@ -28,6 +29,7 @@ interface DataIntakeTabProps {
   onApplyWeekData: (report: WeeklyReport, newRecords: BehaviorRecord[]) => void;
   onNavigateToReport: () => void;
   className?: string;
+  onRequireApiKey?: () => void;
 }
 
 export type IntakeWorkflowStage = 'idle' | 'step1_confirmation' | 'step2_confirmed';
@@ -39,6 +41,7 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
   onApplyWeekData,
   onNavigateToReport,
   className = '9.5',
+  onRequireApiKey,
 }) => {
   const [activeMode, setActiveMode] = useState<'upload' | 'text'>('upload');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -114,6 +117,13 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
 
   // BƯỚC 1: QUÉT & PHÂN TÍCH NHẬP MÔN
   const handleAnalyze = async () => {
+    // Kiểm tra và bắt buộc cài đặt API Key trước khi quét
+    if (!hasGeminiApiKey()) {
+      setError('⚠️ Bạn chưa cài đặt Gemini API Key cá nhân. Vui lòng bấm vào nút [🔑 Nhập Gemini API Key] để kích hoạt tính năng AI.');
+      if (onRequireApiKey) onRequireApiKey();
+      return;
+    }
+
     if (activeMode === 'upload' && !selectedImage) {
       setError('Vui lòng chọn hoặc kéo thả ảnh chụp Sổ đầu bài / Sổ trực cờ đỏ');
       return;
@@ -126,12 +136,13 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
     setIsLoading(true);
     setError(null);
     setCommandFeedback(null);
-    setLoadingStep('Đang gửi dữ liệu đến Gemini 3.1 Pro...');
+    setLoadingStep('Đang gửi dữ liệu đến Gemini 3.8 Flash...');
 
     try {
       setTimeout(() => setLoadingStep('Đang bóc tách 4 trường chuẩn SCN & đối chiếu Roster...'), 1200);
       setTimeout(() => setLoadingStep('Đang áp dụng Barem điểm & phân tích thời gian theo 35 tuần học...'), 2600);
 
+      const userApiKey = getStoredGeminiApiKey();
       const payload = {
         imageBase64: activeMode === 'upload' ? selectedImage : undefined,
         mimeType: imageMimeType,
@@ -141,16 +152,24 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
         weekNumber: selectedWeek,
         academicYear: '2026-2027',
         semester: selectedWeek <= 18 ? 1 : 2,
+        apiKey: userApiKey,
       };
 
       const response = await fetch('/api/analyze-record', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-api-key': userApiKey,
+        },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
+        if (response.status === 401 || errJson.isKeyError) {
+          if (onRequireApiKey) onRequireApiKey();
+          throw new Error('❌ API Key không hợp lệ hoặc đã hết hạn mức. Vui lòng bấm vào nút [Đổi API Key] trên thanh tiêu đề để kiểm tra lại.');
+        }
         throw new Error(errJson.error || `Lỗi máy chủ (${response.status})`);
       }
 
@@ -343,7 +362,7 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
         <div className="relative z-10 max-w-3xl">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/30 text-cyan-200 border border-blue-400/30 mb-3">
             <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-            <span>Mô hình Gemini 3.1 Pro • Quy trình 2 Bước Kiểm soát Thời gian Chuẩn SCN</span>
+            <span>Mô hình Gemini 3.8 Flash • Quy trình 2 Bước Kiểm soát Thời gian Chuẩn SCN</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
             Bóc tách Dữ liệu Sổ Đầu Bài &amp; Sổ Trực Cờ Đỏ
@@ -508,7 +527,7 @@ Thứ Hai (21/09/2026):
             ) : (
               <>
                 <Sparkles className="w-4 h-4 text-yellow-300" />
-                <span>Bắt đầu Bóc tách Dữ liệu (Gemini 3.1 Pro)</span>
+                <span>[⚡ Bắt đầu Bóc tách Dữ liệu (Gemini 3.8 Flash)]</span>
               </>
             )}
           </button>

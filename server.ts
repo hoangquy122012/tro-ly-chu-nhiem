@@ -15,14 +15,59 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+/**
+ * Khởi tạo GoogleGenAI Client với BYOK (Gemini API Key cá nhân của từng giáo viên)
+ */
+const getGeminiClient = (req: express.Request): GoogleGenAI => {
+  const userApiKey =
+    (req.headers['x-gemini-api-key'] as string)?.trim() ||
+    (req.body?.apiKey as string)?.trim() ||
+    process.env.GEMINI_API_KEY?.trim();
+
+  if (!userApiKey) {
+    const err: any = new Error('MISSING_API_KEY');
+    err.status = 401;
+    throw err;
+  }
+
+  return new GoogleGenAI({
+    apiKey: userApiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
     },
-  },
-});
+  });
+};
+
+const handleGeminiError = (error: any, res: express.Response) => {
+  console.error('Gemini API Error:', error);
+  const errMsg = String(error?.message || '');
+  const status = error?.status;
+
+  if (
+    errMsg === 'MISSING_API_KEY' ||
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    status === 429 ||
+    errMsg.includes('API key') ||
+    errMsg.includes('API_KEY') ||
+    errMsg.includes('PERMISSION_DENIED') ||
+    errMsg.includes('RESOURCE_EXHAUSTED') ||
+    errMsg.includes('quota') ||
+    errMsg.includes('unregistered')
+  ) {
+    return res.status(401).json({
+      error: '❌ API Key không hợp lệ hoặc đã hết hạn mức. Vui lòng bấm vào nút [Đổi API Key] trên thanh tiêu đề để kiểm tra lại.',
+      isKeyError: true,
+    });
+  }
+
+  return res.status(500).json({
+    error: error?.message || 'Có lỗi xảy ra khi gọi Google AI',
+  });
+};
 
 // API endpoint to analyze Sổ đầu bài, Sổ cờ đỏ from photo or text
 app.post('/api/analyze-record', async (req, res) => {
@@ -185,9 +230,10 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
 
     // Primary model: gemini-3.1-pro-preview as specified by user instructions
     // Fallback: gemini-3.8-flash for high resilience
+    const client = getGeminiClient(req);
     let responseText = '';
     try {
-      const result = await ai.models.generateContent({
+      const result = await client.models.generateContent({
         model: 'gemini-3.1-pro-preview',
         contents: { parts },
         config: {
@@ -198,7 +244,7 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
       responseText = result.text || '';
     } catch (primaryError: any) {
       console.warn('Primary model gemini-3.1-pro-preview failed, using gemini-3.8-flash fallback:', primaryError?.message);
-      const fallbackResult = await ai.models.generateContent({
+      const fallbackResult = await client.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: { parts },
         config: {
@@ -219,8 +265,7 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
 
     return res.json({ success: true, data: parsedData });
   } catch (error: any) {
-    console.error('Lỗi phân tích sổ đầu bài:', error);
-    return res.status(500).json({ error: error?.message || 'Có lỗi xảy ra khi phân tích dữ liệu sổ đầu bài' });
+    return handleGeminiError(error, res);
   }
 });
 
@@ -262,7 +307,8 @@ Bắt buộc trả về JSON Array thuần túy (không kèm markdown):
     }
     parts.push({ text: promptText });
 
-    const result = await ai.models.generateContent({
+    const client = getGeminiClient(req);
+    const result = await client.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: { parts },
       config: {
@@ -274,8 +320,7 @@ Bắt buộc trả về JSON Array thuần túy (không kèm markdown):
     const parsed = JSON.parse((result.text || '[]').replace(/```json/gi, '').replace(/```/g, '').trim());
     return res.json({ success: true, rules: parsed });
   } catch (error: any) {
-    console.error('Lỗi phân tích barem:', error);
-    return res.status(500).json({ error: error?.message || 'Lỗi phân tích barem' });
+    return handleGeminiError(error, res);
   }
 });
 

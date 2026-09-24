@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Sparkles, BookMarked, RotateCcw, Sliders, RefreshCw, Database } from 'lucide-react';
+import { ShieldCheck, Sparkles, BookMarked, RotateCcw, Sliders, RefreshCw, Key } from 'lucide-react';
 import { SystemProfile } from '../types';
 
 interface HeaderProps {
@@ -11,6 +11,8 @@ interface HeaderProps {
   syncStatus?: 'syncing' | 'synced' | 'error' | 'idle';
   lastSyncedTime?: string | null;
   onManualSync?: () => void;
+  hasApiKey?: boolean;
+  onOpenApiKeyModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   syncStatus = 'synced',
   lastSyncedTime,
   onManualSync,
+  hasApiKey = false,
+  onOpenApiKeyModal,
 }) => {
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
@@ -82,8 +86,35 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Supabase Cloud Auto-Sync Status Badge */}
+        {/* Right Action Area: Supabase Sync Badge & Gemini API Key Status */}
         <div className="flex items-center gap-2">
+          {/* Gemini API Key Status Button (BYOK) */}
+          {hasApiKey ? (
+            <button
+              onClick={onOpenApiKeyModal}
+              className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-500/50 hover:bg-emerald-900/80 rounded-lg px-3 py-1.5 text-xs text-emerald-200 shadow-xs transition cursor-pointer group"
+              title="Gemini API Key cá nhân đã được cài đặt an toàn. Nhấn để đổi hoặc cấu hình lại."
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="font-semibold text-emerald-300 hidden sm:inline">
+                🟢 Đã cài API Key (Nhấn để đổi)
+              </span>
+              <span className="font-semibold text-emerald-300 sm:hidden">
+                🟢 API Key OK
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenApiKeyModal}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg px-3 py-1.5 text-xs font-bold shadow-md shadow-amber-500/30 animate-pulse transition cursor-pointer"
+              title="Chưa có Gemini API Key. Bấm vào đây để cài đặt miễn phí và kích hoạt AI bóc tách sổ."
+            >
+              <Key className="w-3.5 h-3.5 text-white" />
+              <span>[🔑 Nhập Gemini API Key]</span>
+            </button>
+          )}
+
+          {/* Supabase Cloud Auto-Sync Status Badge */}
           {syncStatus === 'syncing' ? (
             <div
               className="flex items-center gap-2 bg-blue-950/80 border border-blue-400/50 rounded-lg px-3 py-1.5 text-xs text-blue-200 shadow-sm animate-pulse"
@@ -115,8 +146,11 @@ export const Header: React.FC<HeaderProps> = ({
               title="Cơ sở dữ liệu đám mây Supabase đã đồng bộ hoàn tất. Nhấn để đồng bộ thủ công."
             >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-semibold text-emerald-300">
+              <span className="font-semibold text-emerald-300 hidden md:inline">
                 🟢 Supabase Cloud: Đã đồng bộ {lastSyncedTime ? `[${lastSyncedTime}]` : ''}
+              </span>
+              <span className="font-semibold text-emerald-300 md:hidden">
+                🟢 Cloud {lastSyncedTime ? `[${lastSyncedTime}]` : ''}
               </span>
               <RefreshCw className="w-3 h-3 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:rotate-180 transition duration-300" />
             </div>

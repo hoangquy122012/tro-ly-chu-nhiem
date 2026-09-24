@@ -19,6 +19,7 @@ import {
 import { BaremRule, ViolationCategory } from '../../types';
 import { DEFAULT_BAREM_RULES } from '../../data/defaultData';
 import { BaremVerificationModal, ExtractedRuleInput } from '../BaremVerificationModal';
+import { getStoredGeminiApiKey, hasGeminiApiKey } from '../../utils/geminiApiKey';
 
 export const CATEGORY_LABELS: Record<ViolationCategory, string> = {
   mat_trat_tu: 'Mất trật tự',
@@ -51,6 +52,7 @@ interface FlexibleBaremTabProps {
   onUpdateBarem: (newRules: BaremRule[]) => void;
   onResetToDefault: () => void;
   className?: string;
+  onRequireApiKey?: () => void;
 }
 
 export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
@@ -58,6 +60,7 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
   onUpdateBarem,
   onResetToDefault,
   className = '9.5',
+  onRequireApiKey,
 }) => {
   const [nlpInput, setNlpInput] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -150,6 +153,13 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
 
   // Thực thi AI quét & trích xuất bảng quy định thi đua của trường
   const handleExecuteAIScan = async () => {
+    // Kiểm tra và bắt buộc cài đặt API Key trước khi quét Barem
+    if (!hasGeminiApiKey()) {
+      setScanErrorMsg('⚠️ Bạn chưa cài đặt Gemini API Key cá nhân. Vui lòng bấm vào nút [🔑 Nhập Gemini API Key] trên thanh tiêu đề để cài đặt.');
+      if (onRequireApiKey) onRequireApiKey();
+      return;
+    }
+
     if (!selectedSchoolFile) {
       setScanErrorMsg('Vui lòng chọn tệp ảnh hoặc file quy định trước khi quét!');
       return;
@@ -159,18 +169,27 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
     setScanErrorMsg(null);
 
     try {
+      const userApiKey = getStoredGeminiApiKey();
       const response = await fetch('/api/parse-barem', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-api-key': userApiKey,
+        },
         body: JSON.stringify({
           fileBase64: selectedSchoolFile.base64,
           mimeType: selectedSchoolFile.mimeType,
           fileName: selectedSchoolFile.name,
+          apiKey: userApiKey,
         }),
       });
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
+        if (response.status === 401 || errJson.isKeyError) {
+          if (onRequireApiKey) onRequireApiKey();
+          throw new Error('❌ API Key không hợp lệ hoặc đã hết hạn mức. Vui lòng bấm vào nút [Đổi API Key] trên thanh tiêu đề để kiểm tra lại.');
+        }
         throw new Error(errJson.error || 'Lỗi khi bóc tách quy chế từ tệp');
       }
 
@@ -202,17 +221,34 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
     e.preventDefault();
     if (!nlpInput.trim()) return;
 
+    if (!hasGeminiApiKey()) {
+      alert('⚠️ Bạn chưa cài đặt Gemini API Key cá nhân. Vui lòng bấm vào nút [🔑 Nhập Gemini API Key] trên thanh tiêu đề.');
+      if (onRequireApiKey) onRequireApiKey();
+      return;
+    }
+
     setIsParsing(true);
     setSuccessMsg(null);
 
     try {
+      const userApiKey = getStoredGeminiApiKey();
       const response = await fetch('/api/parse-barem', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nlpText: nlpInput }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-api-key': userApiKey,
+        },
+        body: JSON.stringify({ nlpText: nlpInput, apiKey: userApiKey }),
       });
 
-      if (!response.ok) throw new Error('Không thể phân tích barem bằng AI');
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        if (response.status === 401 || errJson.isKeyError) {
+          if (onRequireApiKey) onRequireApiKey();
+          throw new Error('❌ API Key không hợp lệ hoặc đã hết hạn mức. Vui lòng bấm vào nút [Đổi API Key] trên thanh tiêu đề để kiểm tra lại.');
+        }
+        throw new Error('Không thể phân tích barem bằng AI');
+      }
 
       const data = await response.json();
       if (data.success && Array.isArray(data.rules) && data.rules.length > 0) {

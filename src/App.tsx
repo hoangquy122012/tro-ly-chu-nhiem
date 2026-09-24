@@ -38,6 +38,8 @@ import { Student, BaremRule, BehaviorRecord, WeeklyReport, SystemProfile } from 
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { ResetDataModal } from './components/ResetDataModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
+import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
+import { hasGeminiApiKey } from './utils/geminiApiKey';
 
 export const CLASS_DATA_STORAGE_KEY = 'edumaster_class_data';
 
@@ -107,6 +109,8 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState<number>(() => initialClassData?.currentMonth ?? 9);
   const [currentSemester, setCurrentSemester] = useState<1 | 2>(() => initialClassData?.currentSemester ?? 1);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [hasUserApiKey, setHasUserApiKey] = useState<boolean>(() => hasGeminiApiKey());
 
   // Operation States & Supabase Cloud Sync
   const [isExportingToDrive, setIsExportingToDrive] = useState(false);
@@ -585,7 +589,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans flex flex-col">
-      {/* App Header with Supabase Cloud Status */}
+      {/* App Header with Supabase Cloud Status & Gemini API Key BYOK */}
       <Header
         currentMonth={currentMonth}
         currentSemester={currentSemester}
@@ -595,6 +599,8 @@ export default function App() {
         syncStatus={syncStatus}
         lastSyncedTime={lastSyncedTime}
         onManualSync={handleManualSyncToSupabase}
+        hasApiKey={hasUserApiKey}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
       />
 
       {/* Main Tab Navigation */}
@@ -613,6 +619,8 @@ export default function App() {
             currentWeek={activeWeek}
             onApplyWeekData={handleApplyWeekData}
             onNavigateToReport={() => setActiveTab('report')}
+            className={profile.className}
+            onRequireApiKey={() => setIsApiKeyModalOpen(true)}
           />
         )}
 
@@ -649,6 +657,7 @@ export default function App() {
           <FlexibleBaremTab
             baremRules={baremRules}
             className={profile.className}
+            onRequireApiKey={() => setIsApiKeyModalOpen(true)}
             onUpdateBarem={(newRules) => {
               setBaremRules(newRules);
               showToast('Đã lưu quy tắc Barem điểm thi đua mới!');
@@ -670,6 +679,19 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Gemini API Key BYOK Configuration Modal */}
+      <GeminiApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => {
+          setIsApiKeyModalOpen(false);
+          setHasUserApiKey(hasGeminiApiKey());
+        }}
+        onSaveSuccess={() => {
+          setHasUserApiKey(hasGeminiApiKey());
+          showToast('🟢 Đã kích hoạt thành công Gemini API Key cá nhân!');
+        }}
+      />
 
       {/* Reset Data Operational Modal */}
       <ResetDataModal
