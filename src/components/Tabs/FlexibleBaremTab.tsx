@@ -20,6 +20,7 @@ import { BaremRule, ViolationCategory } from '../../types';
 import { DEFAULT_BAREM_RULES } from '../../data/defaultData';
 import { BaremVerificationModal, ExtractedRuleInput } from '../BaremVerificationModal';
 import { getStoredGeminiApiKey, hasGeminiApiKey } from '../../utils/geminiApiKey';
+import { analyzeBaremWithGemini } from '../../services/geminiService';
 
 export const CATEGORY_LABELS: Record<ViolationCategory, string> = {
   mat_trat_tu: 'Mất trật tự',
@@ -153,8 +154,8 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
 
   // Thực thi AI quét & trích xuất bảng quy định thi đua của trường
   const handleExecuteAIScan = async () => {
-    // Kiểm tra và bắt buộc cài đặt API Key trước khi quét Barem
-    if (!hasGeminiApiKey()) {
+    const apiKey = localStorage.getItem('edumaster_user_gemini_key') || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
       setScanErrorMsg('⚠️ Bạn chưa cài đặt Gemini API Key cá nhân. Vui lòng bấm vào nút [🔑 Nhập Gemini API Key] trên thanh tiêu đề để cài đặt.');
       if (onRequireApiKey) onRequireApiKey();
       return;
@@ -169,40 +170,26 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
     setScanErrorMsg(null);
 
     try {
-      const userApiKey = getStoredGeminiApiKey();
-      const response = await fetch('/api/parse-barem', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-gemini-api-key': userApiKey,
-        },
-        body: JSON.stringify({
-          fileBase64: selectedSchoolFile.base64,
-          mimeType: selectedSchoolFile.mimeType,
-          fileName: selectedSchoolFile.name,
-          apiKey: userApiKey,
-        }),
+      const rules = await analyzeBaremWithGemini({
+        fileBase64: selectedSchoolFile.base64,
+        mimeType: selectedSchoolFile.mimeType,
+        fileName: selectedSchoolFile.name,
       });
 
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        if (response.status === 401 || errJson.isKeyError) {
-          if (onRequireApiKey) onRequireApiKey();
-          throw new Error('❌ API Key không hợp lệ hoặc đã hết hạn mức. Vui lòng bấm vào nút [Đổi API Key] trên thanh tiêu đề để kiểm tra lại.');
-        }
-        throw new Error(errJson.error || 'Lỗi khi bóc tách quy chế từ tệp');
-      }
-
-      const resData = await response.json();
-      if (resData.success && Array.isArray(resData.rules) && resData.rules.length > 0) {
+      if (Array.isArray(rules) && rules.length > 0) {
         // Mở Hộp thoại Đối soát Barem (80% màn hình) theo đúng yêu cầu!
-        setScannedRulesForModal(resData.rules);
+        setScannedRulesForModal(rules);
         setIsVerificationModalOpen(true);
       } else {
         throw new Error('AI không nhận diện được quy tắc điểm nào trong tệp. Hãy kiểm tra ảnh có rõ nét không.');
       }
     } catch (err: any) {
-      setScanErrorMsg(err?.message || 'Có lỗi xảy ra khi quét tài liệu bằng AI');
+      const msg = err?.message || 'Kiểm tra lại kết nối mạng hoặc API Key';
+      setScanErrorMsg('Lỗi phân tích: ' + msg);
+      alert('Lỗi phân tích: ' + msg);
+      if (err?.message?.includes('API Key') || err?.message?.includes('401')) {
+        if (onRequireApiKey) onRequireApiKey();
+      }
     } finally {
       setIsExtractingWithAI(false);
     }
@@ -221,7 +208,8 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
     e.preventDefault();
     if (!nlpInput.trim()) return;
 
-    if (!hasGeminiApiKey()) {
+    const apiKey = localStorage.getItem('edumaster_user_gemini_key') || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
       alert('⚠️ Bạn chưa cài đặt Gemini API Key cá nhân. Vui lòng bấm vào nút [🔑 Nhập Gemini API Key] trên thanh tiêu đề.');
       if (onRequireApiKey) onRequireApiKey();
       return;
@@ -231,36 +219,21 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
     setSuccessMsg(null);
 
     try {
-      const userApiKey = getStoredGeminiApiKey();
-      const response = await fetch('/api/parse-barem', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-gemini-api-key': userApiKey,
-        },
-        body: JSON.stringify({ nlpText: nlpInput, apiKey: userApiKey }),
-      });
+      const rules = await analyzeBaremWithGemini({ nlpText: nlpInput });
 
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        if (response.status === 401 || errJson.isKeyError) {
-          if (onRequireApiKey) onRequireApiKey();
-          throw new Error('❌ API Key không hợp lệ hoặc đã hết hạn mức. Vui lòng bấm vào nút [Đổi API Key] trên thanh tiêu đề để kiểm tra lại.');
-        }
-        throw new Error('Không thể phân tích barem bằng AI');
-      }
-
-      const data = await response.json();
-      if (data.success && Array.isArray(data.rules) && data.rules.length > 0) {
-        const count = mergeRules(data.rules);
-        setSuccessMsg(`Đã cập nhật thành công ${count} quy tắc điểm theo yêu cầu!`);
+      if (Array.isArray(rules) && rules.length > 0) {
+        // Mở ngay Bảng Đối Soát Barem (Review Modal) để GVCN kiểm tra trước khi nạp vào lớp
+        setScannedRulesForModal(rules);
+        setIsVerificationModalOpen(true);
         setNlpInput('');
-        setTimeout(() => setSuccessMsg(null), 3500);
       } else {
         throw new Error('AI không nhận diện được quy tắc điểm trong câu lệnh');
       }
     } catch (err: any) {
-      alert(err?.message || 'Có lỗi xảy ra khi nạp barem');
+      alert('Lỗi phân tích: ' + (err.message || 'Kiểm tra lại kết nối mạng hoặc API Key'));
+      if (err?.message?.includes('API Key') || err?.message?.includes('401')) {
+        if (onRequireApiKey) onRequireApiKey();
+      }
     } finally {
       setIsParsing(false);
     }

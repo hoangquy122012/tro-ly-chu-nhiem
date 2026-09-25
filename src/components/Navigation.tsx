@@ -19,7 +19,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       id: 'ocr' as ActiveTab,
       label: 'Bóc tách Sổ & AI Phân tích',
       icon: Camera,
-      badge: 'Gemini 3.1 Pro',
+      badge: 'Gemini 3.8 Flash',
     },
     {
       id: 'report' as ActiveTab,

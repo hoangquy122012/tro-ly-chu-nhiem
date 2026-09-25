@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="font-bold text-lg tracking-tight text-white flex items-center gap-1.5">
                 EduMaster AI
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                  <Sparkles className="w-3 h-3 mr-1 text-cyan-300" /> THCS Pro
+                  <Sparkles className="w-3 h-3 mr-1 text-cyan-300" /> EduMaster AI Engine: Gemini 3.8 Flash
                 </span>
               </span>
             </div>

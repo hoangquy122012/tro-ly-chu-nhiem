@@ -2,10 +2,14 @@ export const GEMINI_API_KEY_STORAGE_KEY = 'edumaster_user_gemini_key';
 
 /**
  * Lấy Gemini API Key cá nhân được lưu trong localStorage của trình duyệt
+ * (hoặc biến môi trường VITE_GEMINI_API_KEY nếu có)
  */
 export const getStoredGeminiApiKey = (): string => {
   try {
-    return localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY)?.trim() || '';
+    const userKey = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY)?.trim();
+    if (userKey) return userKey;
+    const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY?.trim();
+    return envKey || '';
   } catch {
     return '';
   }

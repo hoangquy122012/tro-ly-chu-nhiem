@@ -228,28 +228,27 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
     }
     parts.push({ text: promptText });
 
-    // Primary model: gemini-3.1-pro-preview as specified by user instructions
-    // Fallback: gemini-3.8-flash for high resilience
+    // Model: gemini-3.8-flash
     const client = getGeminiClient(req);
     let responseText = '';
     try {
       const result = await client.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: { parts },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-      });
-      responseText = result.text || '';
-    } catch (primaryError: any) {
-      console.warn('Primary model gemini-3.1-pro-preview failed, using gemini-3.8-flash fallback:', primaryError?.message);
-      const fallbackResult = await client.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: { parts },
         config: {
           responseMimeType: 'application/json',
-          temperature: 0.2,
+          temperature: 0.1,
+        },
+      });
+      responseText = result.text || '';
+    } catch (primaryError: any) {
+      console.warn('Model gemini-3.8-flash attempt failed, retrying:', primaryError?.message);
+      const fallbackResult = await client.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: { parts },
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
         },
       });
       responseText = fallbackResult.text || '';
@@ -260,7 +259,12 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
     }
 
     // Clean JSON response if necessary
-    const cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    let cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const objStart = cleanedText.indexOf('{');
+    const objEnd = cleanedText.lastIndexOf('}');
+    if (objStart !== -1 && objEnd !== -1 && objEnd >= objStart) {
+      cleanedText = cleanedText.substring(objStart, objEnd + 1);
+    }
     const parsedData = JSON.parse(cleanedText);
 
     return res.json({ success: true, data: parsedData });
@@ -308,16 +312,37 @@ Bắt buộc trả về JSON Array thuần túy (không kèm markdown):
     parts.push({ text: promptText });
 
     const client = getGeminiClient(req);
-    const result = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: { parts },
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.1,
-      },
-    });
+    let responseText = '';
+    try {
+      const result = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: { parts },
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      });
+      responseText = result.text || '';
+    } catch (primaryErr: any) {
+      console.warn('gemini-3.8-flash barem parse failed, retrying fallback:', primaryErr?.message);
+      const fbResult = await client.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: { parts },
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      });
+      responseText = fbResult.text || '';
+    }
 
-    const parsed = JSON.parse((result.text || '[]').replace(/```json/gi, '').replace(/```/g, '').trim());
+    let cleaned = (responseText || '[]').replace(/```json/gi, '').replace(/```/g, '').trim();
+    const arrayStart = cleaned.indexOf('[');
+    const arrayEnd = cleaned.lastIndexOf(']');
+    if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd >= arrayStart) {
+      cleaned = cleaned.substring(arrayStart, arrayEnd + 1);
+    }
+    const parsed = JSON.parse(cleaned);
     return res.json({ success: true, rules: parsed });
   } catch (error: any) {
     return handleGeminiError(error, res);
