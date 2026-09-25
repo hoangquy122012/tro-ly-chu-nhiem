@@ -40,6 +40,8 @@ export const CATEGORY_LABELS: Record<ViolationCategory, string> = {
   dong_phuc: 'Đồng phục / Khăn quàng',
   hoc_tap: 'Học tập / Bài vở',
   ve_sinh: 'Vệ sinh lớp học',
+  chuyen_can: 'Chuyên cần',
+  tac_phong: 'Tác phong - Kỷ luật',
 };
 
 interface SelectedFileInfo {

@@ -37,6 +37,8 @@ export type ViolationCategory =
   | 'khen_thuong'
   | 'phe_binh'
   | 'vi_pham_nghiem_trong'
+  | 'chuyen_can'
+  | 'tac_phong'
   | 'khac';
 
 export interface BehaviorRecord {
@@ -49,7 +51,7 @@ export interface BehaviorRecord {
   subject: string; // "Toán", "Ngữ văn", "Tiếng Anh", ...
   behavior: string; // Hành vi cụ thể (không ghi chung chung)
   category: ViolationCategory;
-  pointsImpact: number; // Điểm cá nhân (nếu có)
+  pointsImpact?: number; // Điểm cá nhân (nếu có, không bắt buộc)
   educationalMeasure: string; // Biện pháp giáo dục sư phạm đề xuất
   severity: 'nhe' | 'trung_binh' | 'nang' | 'khen_thuong';
   weekNumber: number;

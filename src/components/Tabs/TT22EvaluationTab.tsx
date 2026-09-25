@@ -21,8 +21,18 @@ export const TT22EvaluationTab: React.FC<TT22EvaluationTabProps> = ({
   // Compute stats for each student
   const evaluatedStudents = students.map((student) => {
     const studentRecords = records.filter((r) => r.studentId === student.id);
-    const violations = studentRecords.filter((r) => r.pointsImpact < 0);
-    const bonuses = studentRecords.filter((r) => r.pointsImpact > 0);
+    const bonuses = studentRecords.filter(
+      (r) =>
+        r.category === 'khen_thuong' ||
+        r.category === 'diem_tot' ||
+        r.category === 'viec_tot' ||
+        (r.pointsImpact !== undefined && r.pointsImpact > 0)
+    );
+    const violations = studentRecords.filter(
+      (r) =>
+        (r.pointsImpact !== undefined && r.pointsImpact < 0) ||
+        (r.category !== 'khen_thuong' && r.category !== 'diem_tot' && r.category !== 'viec_tot')
+    );
 
     // TT22 Rule engine
     let autoRank: TT22Rank = 'Tốt';

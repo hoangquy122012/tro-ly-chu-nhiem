@@ -73,7 +73,10 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
 
   // Filter records for selected student in Mode 3
   const studentRecords = records.filter(
-    (r) => r.studentId === selectedStudentId && r.pointsImpact < 0
+    (r) =>
+      r.studentId === selectedStudentId &&
+      ((r.pointsImpact !== undefined && r.pointsImpact < 0) ||
+        (r.category !== 'khen_thuong' && r.category !== 'diem_tot' && r.category !== 'viec_tot'))
   );
 
   const handleApplyMonthReset = () => {
@@ -421,7 +424,7 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
                         />
                         <div className="space-y-0.5">
                           <span className="font-bold block">
-                            [{r.dayOfWeek}, Ngày {r.date}] - Tiết {r.period} môn {r.subject} ({r.pointsImpact}đ)
+                            [{r.dayOfWeek}, Ngày {r.date}] - Tiết {r.period} môn {r.subject}{r.pointsImpact && r.pointsImpact !== 0 ? ` (${r.pointsImpact > 0 ? `+${r.pointsImpact}` : r.pointsImpact}đ)` : ''}
                           </span>
                           <span className="text-slate-600 font-sans block">{r.behavior}</span>
                         </div>

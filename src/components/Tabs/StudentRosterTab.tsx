@@ -14,9 +14,10 @@ import {
   Phone,
   UserCheck,
   Edit2,
+  Trash2,
   Clock,
 } from 'lucide-react';
-import { Student, BehaviorRecord, TT22Rank, StudentRole } from '../../types';
+import { Student, BehaviorRecord, TT22Rank, StudentRole, ViolationCategory } from '../../types';
 
 interface StudentRosterTabProps {
   students: Student[];
@@ -24,6 +25,8 @@ interface StudentRosterTabProps {
   onAddRecord: (newRec: BehaviorRecord) => void;
   onAddStudent: (newStudent: Student) => void;
   onUpdateStudent: (student: Student) => void;
+  onUpdateRecord?: (updatedRec: BehaviorRecord) => void;
+  onDeleteRecord?: (recordId: string) => void;
 }
 
 export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
@@ -32,12 +35,15 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
   onAddRecord,
   onAddStudent,
   onUpdateStudent,
+  onUpdateRecord,
+  onDeleteRecord,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'stt' | 'name'>('stt');
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddRecordModal, setShowAddRecordModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<BehaviorRecord | null>(null);
   const [copiedZalo, setCopiedZalo] = useState(false);
 
   // New Student Form State
@@ -47,13 +53,13 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
   const [newParentName, setNewParentName] = useState('');
   const [newParentPhone, setNewParentPhone] = useState('');
 
-  // New Record Form State (strictly enforces the 4 fields!)
+  // Record Form State (strictly enforces [Ngày/Thứ] - [Tiết] - [Môn] - [Hành vi cụ thể] + Phân loại & Biện pháp giáo dục)
   const [recDayOfWeek, setRecDayOfWeek] = useState('Thứ Ba');
   const [recDate, setRecDate] = useState('22/09/2026');
   const [recPeriod, setRecPeriod] = useState<number>(2);
   const [recSubject, setRecSubject] = useState('Toán');
   const [recBehavior, setRecBehavior] = useState('');
-  const [recPoints, setRecPoints] = useState<number>(-2);
+  const [recCategory, setRecCategory] = useState<ViolationCategory>('hoc_tap');
   const [recMeasure, setRecMeasure] = useState('Nhắc nhở, rút kinh nghiệm');
 
   const filteredStudents = students
@@ -69,8 +75,16 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
 
   const getStudentStats = (studentId: string) => {
     const studentRecords = records.filter((r) => r.studentId === studentId);
-    const violations = studentRecords.filter((r) => r.pointsImpact < 0);
-    const bonuses = studentRecords.filter((r) => r.pointsImpact > 0);
+    const violations = studentRecords.filter(
+      (r) =>
+        (r.pointsImpact !== undefined && r.pointsImpact < 0) ||
+        (r.category !== 'khen_thuong' && r.category !== 'diem_tot' && r.category !== 'viec_tot')
+    );
+    const bonuses = studentRecords.filter(
+      (r) =>
+        (r.pointsImpact !== undefined && r.pointsImpact > 0) ||
+        (r.category === 'khen_thuong' || r.category === 'diem_tot' || r.category === 'viec_tot')
+    );
 
     // TT22 Monthly Projection Logic
     let rank: TT22Rank = 'Tốt';
@@ -109,9 +123,65 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
     setNewParentPhone('');
   };
 
-  const handleCreateRecord = (e: React.FormEvent) => {
+  const handleOpenAddRecord = () => {
+    setEditingRecord(null);
+    setRecDayOfWeek('Thứ Ba');
+    setRecDate('22/09/2026');
+    setRecPeriod(2);
+    setRecSubject('Toán');
+    setRecBehavior('');
+    setRecCategory('hoc_tap');
+    setRecMeasure('Nhắc nhở, rút kinh nghiệm');
+    setShowAddRecordModal(true);
+  };
+
+  const handleOpenEditRecord = (record: BehaviorRecord) => {
+    setEditingRecord(record);
+    setRecDayOfWeek(record.dayOfWeek);
+    setRecDate(record.date);
+    setRecPeriod(record.period);
+    setRecSubject(record.subject);
+    setRecBehavior(record.behavior);
+    setRecCategory(
+      record.category === 'khen_thuong' || record.category === 'diem_tot' || record.category === 'viec_tot'
+        ? 'khen_thuong'
+        : record.category === 'di_muon' || record.category === 'chuyen_can' || record.category === 'nghi_hoc' || record.category === 'bo_tiet'
+        ? 'chuyen_can'
+        : record.category === 'tac_phong' || record.category === 'mat_trat_tu' || record.category === 'dong_phuc' || record.category === 'khong_dong_phuc' || record.category === 'thai_do_sai'
+        ? 'tac_phong'
+        : 'hoc_tap'
+    );
+    setRecMeasure(record.educationalMeasure || 'Nhắc nhở, rút kinh nghiệm');
+    setShowAddRecordModal(true);
+  };
+
+  const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeStudent || !recBehavior.trim()) return;
+
+    const isReward = recCategory === 'khen_thuong';
+    const measure = recMeasure.trim() || (isReward ? 'Tuyên dương trước lớp' : 'Nhắc nhở, rút kinh nghiệm');
+
+    if (editingRecord) {
+      const updatedRec: BehaviorRecord = {
+        ...editingRecord,
+        dayOfWeek: recDayOfWeek,
+        date: recDate,
+        period: Number(recPeriod),
+        subject: recSubject,
+        behavior: recBehavior.trim(),
+        category: recCategory,
+        educationalMeasure: measure,
+        severity: isReward ? 'khen_thuong' : 'nhe',
+      };
+      if (onUpdateRecord) {
+        onUpdateRecord(updatedRec);
+      }
+      setShowAddRecordModal(false);
+      setEditingRecord(null);
+      setRecBehavior('');
+      return;
+    }
 
     const newRec: BehaviorRecord = {
       id: `rec_${Date.now()}`,
@@ -122,10 +192,9 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
       period: Number(recPeriod),
       subject: recSubject,
       behavior: recBehavior.trim(),
-      category: recPoints < 0 ? 'mat_trat_tu' : 'diem_tot',
-      pointsImpact: Number(recPoints),
-      educationalMeasure: recMeasure.trim(),
-      severity: recPoints < 0 ? 'nhe' : 'khen_thuong',
+      category: recCategory,
+      educationalMeasure: measure,
+      severity: isReward ? 'khen_thuong' : 'nhe',
       weekNumber: 4,
       semester: 1,
       month: 9,
@@ -338,11 +407,11 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setShowAddRecordModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs"
+                onClick={handleOpenAddRecord}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs transition"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Thêm biểu hiện mới (4 trường)</span>
+                <span>Thêm biểu hiện mới (Nhật ký SCN)</span>
               </button>
 
               {(() => {
@@ -396,7 +465,11 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
               ) : (
                 <div className="space-y-3">
                   {getStudentStats(activeStudent.id).records.map((rec) => {
-                    const isReward = rec.pointsImpact > 0;
+                    const isReward =
+                      rec.category === 'khen_thuong' ||
+                      rec.category === 'diem_tot' ||
+                      rec.category === 'viec_tot' ||
+                      (rec.pointsImpact !== undefined && rec.pointsImpact > 0);
                     return (
                       <div
                         key={rec.id}
@@ -408,13 +481,35 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                           <span className="font-semibold text-slate-800">
                             {rec.dayOfWeek} ({rec.date}) • Tiết {rec.period} - Môn {rec.subject}
                           </span>
-                          <span
-                            className={`px-2 py-0.5 rounded font-bold text-[11px] ${
-                              isReward ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            {rec.pointsImpact > 0 ? `+${rec.pointsImpact}đ` : `${rec.pointsImpact}đ`}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded font-bold text-[11px] ${
+                                isReward ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}
+                            >
+                              {rec.pointsImpact && rec.pointsImpact !== 0
+                                ? (rec.pointsImpact > 0 ? `+${rec.pointsImpact}đ` : `${rec.pointsImpact}đ`)
+                                : (isReward ? 'Khen thưởng' : 'Ghi nhận')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditRecord(rec)}
+                              className="p-1 text-slate-400 hover:text-blue-600 rounded transition"
+                              title="Chỉnh sửa biểu hiện"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            {onDeleteRecord && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteRecord(rec.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                                title="Xóa biểu hiện"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <p className="text-slate-800 font-medium">
@@ -422,7 +517,7 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                         </p>
 
                         <p className="text-slate-500 italic">
-                          <strong>Biện pháp giáo dục:</strong> {rec.educationalMeasure}
+                          <strong>Biện pháp giáo dục:</strong> {rec.educationalMeasure || 'Nhắc nhở, rút kinh nghiệm'}
                         </p>
                       </div>
                     );
@@ -434,20 +529,25 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
         </div>
       )}
 
-      {/* Add New Record Modal (4 Fields Enforced) */}
+      {/* Add / Edit Record Modal */}
       {showAddRecordModal && activeStudent && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <form
-            onSubmit={handleCreateRecord}
+            onSubmit={handleSaveRecord}
             className="bg-white rounded-2xl max-w-lg w-full shadow-2xl p-6 space-y-4"
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-                Thêm Biểu Hiện Cho: {activeStudent.name}
+                {editingRecord
+                  ? `Chỉnh Sửa Biểu Hiện Cho: ${activeStudent.name}`
+                  : `Thêm Biểu Hiện Cho: ${activeStudent.name}`}
               </h3>
               <button
                 type="button"
-                onClick={() => setShowAddRecordModal(false)}
+                onClick={() => {
+                  setShowAddRecordModal(false);
+                  setEditingRecord(null);
+                }}
                 className="text-slate-400 hover:text-slate-700"
               >
                 ✕
@@ -526,19 +626,27 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            {/* Bố cục 2 cột cân đối: Phân loại & Biện pháp giáo dục */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Điểm cộng / trừ:</label>
+                <label className="font-semibold text-slate-700 block mb-1">Phân loại:</label>
                 <select
-                  value={recPoints}
-                  onChange={(e) => setRecPoints(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
+                  value={recCategory}
+                  onChange={(e) => {
+                    const val = e.target.value as ViolationCategory;
+                    setRecCategory(val);
+                    if (val === 'khen_thuong' && (!recMeasure || recMeasure === 'Nhắc nhở, rút kinh nghiệm')) {
+                      setRecMeasure('Tuyên dương trước lớp');
+                    } else if (val !== 'khen_thuong' && recMeasure === 'Tuyên dương trước lớp') {
+                      setRecMeasure('Nhắc nhở, rút kinh nghiệm');
+                    }
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs"
                 >
-                  <option value={-1}>-1đ (Mất trật tự nhẹ)</option>
-                  <option value={-2}>-2đ (Đi muộn / Quên bài / Điểm &lt; 5)</option>
-                  <option value={-5}>-5đ (Nghỉ không phép / Thái độ sai)</option>
-                  <option value={1}>+1đ (Điểm tốt 8, 9, 10)</option>
-                  <option value={2}>+2đ (Việc tốt / Nhặt của rơi)</option>
+                  <option value="hoc_tap">Học tập</option>
+                  <option value="chuyen_can">Chuyên cần</option>
+                  <option value="tac_phong">Tác phong - Kỷ luật</option>
+                  <option value="khen_thuong">Khen thưởng / Việc tốt</option>
                 </select>
               </div>
 
@@ -548,7 +656,8 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                   type="text"
                   value={recMeasure}
                   onChange={(e) => setRecMeasure(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
+                  placeholder="Nhắc nhở, rút kinh nghiệm / Tuyên dương / Báo PH..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs"
                 />
               </div>
             </div>
@@ -556,7 +665,10 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
               <button
                 type="button"
-                onClick={() => setShowAddRecordModal(false)}
+                onClick={() => {
+                  setShowAddRecordModal(false);
+                  setEditingRecord(null);
+                }}
                 className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-semibold"
               >
                 Hủy bỏ
@@ -565,7 +677,7 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                 type="submit"
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs"
               >
-                Lưu vào Nhật ký SCN
+                {editingRecord ? 'Cập nhật vào Nhật ký SCN' : 'Lưu vào Nhật ký SCN'}
               </button>
             </div>
           </form>

@@ -436,3 +436,235 @@ export function exportStudentProfileToWordDoc(
   URL.revokeObjectURL(url);
 }
 
+export interface WeeklySummaryStatsData {
+  weekNumber: number;
+  dateRange: string;
+  totalViolations: number;
+  prevWeekViolations: number | null;
+  violatorsCount: number;
+  totalStudents: number;
+  violatorPercent: string;
+  goodStudentsCount: number;
+  goodPercent: string;
+  topPeriodDayText: string;
+  topAttentionStudents: Array<{
+    stt: number;
+    name: string;
+    count: number;
+    mainBehaviors: string;
+    severityLabel: string;
+    isParentContacted?: boolean;
+  }>;
+  topSubjects: Array<{ subject: string; count: number }>;
+  dayDistribution: Array<{ day: string; count: number }>;
+}
+
+/**
+ * Xuất Biên Bản Sơ Kết Tuần ra file Word (.doc) theo chuẩn thể thức văn bản hành chính sư phạm
+ */
+export function exportWeeklySummaryReportDoc(
+  data: WeeklySummaryStatsData,
+  profile: SystemProfile
+) {
+  const fileName = `Bien_Ban_So_Ket_Tuan_${data.weekNumber}_Lop_${profile.className.replace(/\s+/g, '_')}.doc`;
+
+  const prevComparisonText =
+    data.prevWeekViolations === null
+      ? 'Chưa có số liệu tuần trước'
+      : data.totalViolations > data.prevWeekViolations
+      ? `Tăng ${data.totalViolations - data.prevWeekViolations} lượt so với Tuần ${data.weekNumber - 1}`
+      : data.totalViolations < data.prevWeekViolations
+      ? `Giảm ${data.prevWeekViolations - data.totalViolations} lượt so với Tuần ${data.weekNumber - 1}`
+      : `Tương đương so với Tuần ${data.weekNumber - 1}`;
+
+  const topStudentsRows =
+    data.topAttentionStudents.length > 0
+      ? data.topAttentionStudents
+          .map(
+            (s, idx) => `
+        <tr style="background-color: ${idx % 2 === 1 ? '#fbfbfb' : '#ffffff'};">
+          <td style="border: 1px solid #000; padding: 6px; text-align: center;">${s.stt || idx + 1}</td>
+          <td style="border: 1px solid #000; padding: 6px; font-weight: bold;">${s.name}</td>
+          <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; color: #b91c1c;">${s.count} lượt</td>
+          <td style="border: 1px solid #000; padding: 6px;">${s.mainBehaviors}</td>
+          <td style="border: 1px solid #000; padding: 6px; text-align: center;">${s.severityLabel}</td>
+          <td style="border: 1px solid #000; padding: 6px; text-align: center;">${s.isParentContacted ? 'Đã liên hệ PH' : 'Đã nhắc nhở trực tiếp'}</td>
+        </tr>
+      `
+          )
+          .join('')
+      : '<tr><td colspan="6" style="border: 1px solid #000; padding: 10px; text-align: center; font-style: italic;">Không có học sinh vi phạm từ 2 lần trở lên. Nề nếp tuần được duy trì tốt.</td></tr>';
+
+  const subjectsRows =
+    data.topSubjects.length > 0
+      ? data.topSubjects
+          .slice(0, 5)
+          .map(
+            (subj, idx) => `
+        <tr>
+          <td style="border: 1px solid #000; padding: 5px; text-align: center;">${idx + 1}</td>
+          <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">${subj.subject}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: center;">${subj.count} lượt</td>
+        </tr>
+      `
+          )
+          .join('')
+      : '<tr><td colspan="3" style="border: 1px solid #000; padding: 6px; text-align: center; font-style: italic;">Không có ghi nhận vi phạm theo môn.</td></tr>';
+
+  const daysRows = data.dayDistribution
+    .map(
+      (d) => `
+      <tr>
+        <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">${d.day}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: center;">${d.count} lượt vi phạm</td>
+      </tr>
+    `
+    )
+    .join('');
+
+  const documentHtml = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <meta charset="utf-8">
+      <title>BIÊN BẢN SƠ KẾT NỀ NẾP TUẦN ${data.weekNumber} - LỚP ${profile.className}</title>
+      <style>
+        @page { size: A4 portrait; margin: 2cm; }
+        body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.4; color: #000; }
+        h1, h2, h3, p { margin: 0; padding: 0; }
+        table { border-collapse: collapse; width: 100%; }
+      </style>
+    </head>
+    <body>
+      <table style="margin-bottom: 20px;">
+        <tr>
+          <td style="width: 45%; text-align: center; vertical-align: top;">
+            <p style="font-size: 11pt; text-transform: uppercase;">UBND TP. HỒ CHÍ MINH</p>
+            <p style="font-weight: bold; font-size: 11pt; text-transform: uppercase;">${profile.schoolName}</p>
+            <p style="font-size: 11pt;">LỚP: <b>${profile.className}</b></p>
+          </td>
+          <td style="width: 55%; text-align: center; vertical-align: top;">
+            <p style="font-weight: bold; font-size: 11pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+            <p style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Độc lập - Tự do - Hạnh phúc</p>
+          </td>
+        </tr>
+      </table>
+
+      <div style="text-align: center; margin-bottom: 25px;">
+        <h2 style="font-size: 15pt; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">
+          BIÊN BẢN SƠ KẾT CÔNG TÁC CHỦ NHIỆM & NỀ NẾP LỚP
+        </h2>
+        <p style="font-size: 13pt; font-weight: bold; color: #1e3a8a;">TUẦN ${data.weekNumber} (${data.dateRange})</p>
+        <p style="font-size: 11pt; font-style: italic; margin-top: 4px;">Năm học: ${profile.academicYear} • Giáo viên chủ nhiệm: ${profile.teacherName}</p>
+      </div>
+
+      <h3 style="font-size: 12pt; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+        I. TỔNG QUAN CHỈ SỐ NỀ NẾP & RÈN LUYỆN TRONG TUẦN
+      </h3>
+      <table style="margin-bottom: 20px;">
+        <tr>
+          <td style="border: 1px solid #000; padding: 8px; width: 50%;"><b>1. Tổng số lượt vi phạm trong tuần:</b> ${data.totalViolations} lượt</td>
+          <td style="border: 1px solid #000; padding: 8px; width: 50%;"><b>So sánh với tuần trước:</b> ${prevComparisonText}</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #000; padding: 8px;"><b>2. Số học sinh có vi phạm:</b> ${data.violatorsCount} / ${data.totalStudents} học sinh (chiếm ${data.violatorPercent}%)</td>
+          <td style="border: 1px solid #000; padding: 8px;"><b>3. Số học sinh nề nếp tốt (0 lỗi):</b> ${data.goodStudentsCount} / ${data.totalStudents} học sinh (${data.goodPercent}%)</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="border: 1px solid #000; padding: 8px;">
+            <b>4. Thời điểm / Tiết học trọng điểm cần lưu ý:</b> ${data.topPeriodDayText || 'Không có thời điểm nổi cộm'}
+          </td>
+        </tr>
+      </table>
+
+      <h3 style="font-size: 12pt; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+        II. DANH SÁCH HỌC SINH CẦN LƯU Ý & NHẮC NHỞ (TỪ 2 LƯỢT VI PHẠM TRỞ LÊN)
+      </h3>
+      <table style="margin-bottom: 20px;">
+        <thead>
+          <tr style="background-color: #f0f0f0;">
+            <th style="border: 1px solid #000; padding: 6px; width: 6%;">STT</th>
+            <th style="border: 1px solid #000; padding: 6px; width: 22%;">Họ và tên</th>
+            <th style="border: 1px solid #000; padding: 6px; width: 14%;">Số lượt</th>
+            <th style="border: 1px solid #000; padding: 6px; width: 30%;">Lỗi vi phạm chủ yếu</th>
+            <th style="border: 1px solid #000; padding: 6px; width: 14%;">Mức cảnh báo</th>
+            <th style="border: 1px solid #000; padding: 6px; width: 14%;">Tương tác PH</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${topStudentsRows}
+        </tbody>
+      </table>
+
+      <h3 style="font-size: 12pt; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+        III. THỐNG KÊ THEO MÔN HỌC & NGÀY TRONG TUẦN
+      </h3>
+      <table style="margin-bottom: 25px;">
+        <tr>
+          <td style="width: 50%; vertical-align: top; padding-right: 10px;">
+            <p style="font-weight: bold; margin-bottom: 6px;">1. Top môn học phát sinh vi phạm:</p>
+            <table>
+              <thead>
+                <tr style="background-color: #f0f0f0;">
+                  <th style="border: 1px solid #000; padding: 5px; width: 15%;">#</th>
+                  <th style="border: 1px solid #000; padding: 5px; width: 55%;">Môn học</th>
+                  <th style="border: 1px solid #000; padding: 5px; width: 30%;">Số lượt</th>
+                </tr>
+              </thead>
+              <tbody>${subjectsRows}</tbody>
+            </table>
+          </td>
+          <td style="width: 50%; vertical-align: top; padding-left: 10px;">
+            <p style="font-weight: bold; margin-bottom: 6px;">2. Phân bổ vi phạm theo ngày:</p>
+            <table>
+              <thead>
+                <tr style="background-color: #f0f0f0;">
+                  <th style="border: 1px solid #000; padding: 5px; width: 50%;">Ngày trong tuần</th>
+                  <th style="border: 1px solid #000; padding: 5px; width: 50%;">Số lượt</th>
+                </tr>
+              </thead>
+              <tbody>${daysRows}</tbody>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <h3 style="font-size: 12pt; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+        IV. ĐÁNH GIÁ CHUNG VÀ PHƯƠNG HƯỚNG TUẦN TIẾP THEO
+      </h3>
+      <div style="border: 1px solid #000; padding: 10px; margin-bottom: 30px; font-size: 11pt; line-height: 1.6;">
+        <p>• <b>Ưu điểm:</b> Đa số học sinh toàn lớp duy trì tốt nề nếp, tác phong đồng phục nghiêm túc, tham gia các hoạt động tập thể nhiệt tình.</p>
+        <p>• <b>Tồn tại:</b> Vẫn còn một số học sinh tái diễn lỗi chuẩn bị bài và trật tự trong giờ học bộ môn.</p>
+        <p>• <b>Biện pháp khắc phục:</b> GVCN phối hợp cùng Ban cán sự lớp đôn đốc 15 phút đầu giờ; liên hệ gia đình đối với các em vi phạm nhiều lần để cùng phối hợp giáo dục.</p>
+      </div>
+
+      <table style="width: 100%; margin-top: 20px;">
+        <tr>
+          <td style="width: 50%; text-align: center; vertical-align: top;">
+            <p style="font-weight: bold; text-transform: uppercase; font-size: 11pt;">ĐẠI DIỆN BAN CÁN SỰ LỚP</p>
+            <p style="font-style: italic; font-size: 10pt; margin-bottom: 55px;">(Ký và ghi rõ họ tên)</p>
+          </td>
+          <td style="width: 50%; text-align: center; vertical-align: top;">
+            <p style="font-style: italic; font-size: 11pt; margin-bottom: 5px;">Ngày ..... tháng ..... năm 202...</p>
+            <p style="font-weight: bold; text-transform: uppercase; font-size: 11pt;">GIÁO VIÊN CHỦ NHIỆM</p>
+            <p style="font-style: italic; font-size: 10pt; margin-bottom: 55px;">(Ký và ghi rõ họ tên)</p>
+            <p style="font-weight: bold; font-size: 11pt;">${profile.teacherName}</p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff', documentHtml], {
+    type: 'application/msword;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const downloadLink = document.createElement('a');
+  downloadLink.href = url;
+  downloadLink.download = fileName;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+  URL.revokeObjectURL(url);
+}
+

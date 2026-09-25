@@ -401,6 +401,16 @@ export default function App() {
     showToast(`Đã thêm biểu hiện cho ${newRec.studentName} vào Nhật ký SCN!`);
   };
 
+  const handleUpdateRecord = (updatedRec: BehaviorRecord) => {
+    setRecords((prev) => prev.map((r) => (r.id === updatedRec.id ? updatedRec : r)));
+    showToast(`Đã cập nhật biểu hiện cho ${updatedRec.studentName}!`);
+  };
+
+  const handleDeleteRecord = (recordId: string) => {
+    setRecords((prev) => prev.filter((r) => r.id !== recordId));
+    showToast('Đã xóa biểu hiện khỏi Nhật ký SCN!');
+  };
+
   const handleAddStudent = (newStudent: Student) => {
     setStudents((prev) => [...prev, newStudent]);
     showToast(`Đã thêm học sinh ${newStudent.name} vào danh sách lớp ${profile.className}!`);
@@ -710,6 +720,8 @@ export default function App() {
             onAddRecord={handleAddRecord}
             onAddStudent={handleAddStudent}
             onUpdateStudent={handleUpdateStudent}
+            onUpdateRecord={handleUpdateRecord}
+            onDeleteRecord={handleDeleteRecord}
           />
         )}
 
