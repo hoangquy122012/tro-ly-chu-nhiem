@@ -1187,7 +1187,7 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
                           }}
                           className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-blue-700"
                         >
-                          {['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'].map((d) => (
+                          {['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu'].map((d) => (
                             <option key={d} value={d}>
                               {d}
                             </option>
@@ -1387,7 +1387,7 @@ export const DataIntakeTab: React.FC<DataIntakeTabProps> = ({
                     onChange={(e) => setManualDay(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-medium"
                   >
-                    {['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'].map((d) => (
+                    {['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu'].map((d) => (
                       <option key={d} value={d}>
                         {d}
                       </option>

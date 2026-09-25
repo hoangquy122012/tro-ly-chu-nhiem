@@ -571,7 +571,6 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                   <option value="Thứ Tư">Thứ Tư</option>
                   <option value="Thứ Năm">Thứ Năm</option>
                   <option value="Thứ Sáu">Thứ Sáu</option>
-                  <option value="Thứ Bảy">Thứ Bảy</option>
                 </select>
               </div>
 

@@ -52,6 +52,7 @@ export interface ClassDataStorage {
   activeWeek: number;
   currentMonth: number;
   currentSemester: 1 | 2;
+  pedagogicalEvaluations?: Record<string, { notes: Record<string, string>; ranks: Record<string, any> }>;
   lastUpdated?: string;
 }
 
@@ -108,6 +109,9 @@ export default function App() {
   const [activeWeek, setActiveWeek] = useState<number>(() => initialClassData?.activeWeek ?? 3);
   const [currentMonth, setCurrentMonth] = useState<number>(() => initialClassData?.currentMonth ?? 9);
   const [currentSemester, setCurrentSemester] = useState<1 | 2>(() => initialClassData?.currentSemester ?? 1);
+  const [pedagogicalEvaluations, setPedagogicalEvaluations] = useState<
+    Record<string, { notes: Record<string, string>; ranks: Record<string, any> }>
+  >(() => initialClassData?.pedagogicalEvaluations || {});
   const [timeFilterMode, setTimeFilterMode] = useState<TimeFilterMode>('week');
   const [selectedMonthNum, setSelectedMonthNum] = useState<number>(9);
   const [selectedSemesterNum, setSelectedSemesterNum] = useState<1 | 2>(1);
@@ -336,6 +340,7 @@ export default function App() {
         activeWeek,
         currentMonth,
         currentSemester,
+        pedagogicalEvaluations,
         lastUpdated: new Date().toISOString(),
       };
       await saveClassDataToSupabase(classId, dataPackage);
@@ -347,6 +352,54 @@ export default function App() {
     } catch (err) {
       setSyncStatus('error');
       showToast('⚠️ Lỗi kết nối Supabase Cloud. Dữ liệu đã lưu an toàn vào LocalStorage.', 'info');
+    }
+  };
+
+  // Lưu và đồng bộ nhận xét TT22 lên Supabase Cloud & LocalStorage
+  const handleSavePedagogicalEvaluations = async (
+    period: string,
+    notes: Record<string, string>,
+    ranks: Record<string, any>
+  ) => {
+    const updatedEvals = {
+      ...pedagogicalEvaluations,
+      [period]: { notes, ranks },
+    };
+    setPedagogicalEvaluations(updatedEvals);
+
+    // Lưu vào LocalStorage
+    const currentSaved = loadSavedClassData();
+    if (currentSaved) {
+      currentSaved.pedagogicalEvaluations = updatedEvals;
+      currentSaved.lastUpdated = new Date().toISOString();
+      localStorage.setItem(CLASS_DATA_STORAGE_KEY, JSON.stringify(currentSaved));
+    }
+
+    // Đồng bộ tức thì lên Supabase Cloud
+    try {
+      setSyncStatus('syncing');
+      const classId = formatClassId(profile.className);
+      const dataPackage: ClassDataStorage = {
+        profile,
+        students,
+        baremRules,
+        records,
+        reports,
+        activeWeek,
+        currentMonth,
+        currentSemester,
+        pedagogicalEvaluations: updatedEvals,
+        lastUpdated: new Date().toISOString(),
+      };
+      await saveClassDataToSupabase(classId, dataPackage);
+      setSyncStatus('synced');
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      setLastSyncedTime(timeStr);
+      showToast(`🟢 Supabase Cloud: Đã lưu & đồng bộ nhận xét [${timeStr}]`);
+    } catch (err) {
+      setSyncStatus('error');
+      showToast('Đã lưu nhận xét vào bộ nhớ máy (Lỗi kết nối Supabase)', 'info');
     }
   };
 
@@ -372,6 +425,7 @@ export default function App() {
       if (typeof cloudData.activeWeek === 'number') setActiveWeek(cloudData.activeWeek);
       if (typeof cloudData.currentMonth === 'number') setCurrentMonth(cloudData.currentMonth);
       if (cloudData.currentSemester === 1 || cloudData.currentSemester === 2) setCurrentSemester(cloudData.currentSemester);
+      if (cloudData.pedagogicalEvaluations) setPedagogicalEvaluations(cloudData.pedagogicalEvaluations);
 
       localStorage.setItem(CLASS_DATA_STORAGE_KEY, JSON.stringify(cloudData));
       setSyncStatus('synced');
@@ -726,7 +780,15 @@ export default function App() {
         )}
 
         {activeTab === 'tt22' && (
-          <TT22EvaluationTab students={students} records={records} />
+          <TT22EvaluationTab
+            students={students}
+            records={records}
+            className={profile.className}
+            profile={profile}
+            savedEvaluations={pedagogicalEvaluations}
+            onSaveEvaluations={handleSavePedagogicalEvaluations}
+            onRequireApiKey={() => setIsApiKeyModalOpen(true)}
+          />
         )}
 
         {activeTab === 'drive' && (

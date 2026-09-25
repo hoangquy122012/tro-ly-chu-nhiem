@@ -749,7 +749,6 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
           'Thứ Tư': 0,
           'Thứ Năm': 0,
           'Thứ Sáu': 0,
-          'Thứ Bảy': 0,
         };
         const comboCounts: Record<string, number> = {};
 
@@ -794,7 +793,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
           .sort((a, b) => b.count - a.count);
 
         // Phân bổ theo ngày
-        const dayDistribution = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'].map((day) => ({
+        const dayDistribution = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu'].map((day) => ({
           day,
           count: dayCounts[day] || 0,
         }));
@@ -997,13 +996,13 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
 
             {/* 3. BIỂU ĐỒ CỘT PHÂN BỔ THEO THỨ & TOP MÔN HỌC */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              {/* Biểu đồ phân bổ theo ngày trong tuần (Thứ 2 đến Thứ 7) */}
+              {/* Biểu đồ phân bổ theo ngày trong tuần (Thứ 2 đến Thứ 6) */}
               <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-blue-600" />
                     <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
-                      Phân Bổ Lượt Vi Phạm Theo Ngày (Thứ 2 - Thứ 7)
+                      Phân Bổ Lượt Vi Phạm Theo Ngày (Thứ 2 - Thứ 6)
                     </h3>
                   </div>
                   <span className="text-[11px] font-semibold text-slate-500">
@@ -1013,7 +1012,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
 
                 {/* Biểu đồ cột trực quan */}
                 <div className="pt-4 pb-2">
-                  <div className="grid grid-cols-6 gap-2 sm:gap-3 items-end h-44 border-b border-slate-200 pb-2 px-1">
+                  <div className="grid grid-cols-5 gap-2 sm:gap-4 items-end h-44 border-b border-slate-200 pb-2 px-1">
                     {dayDistribution.map((d, idx) => {
                       const heightPercent = maxDayCount > 0 ? (d.count / maxDayCount) * 100 : 0;
                       const isPeak = d.count === maxDayCount && d.count > 0;
@@ -1027,7 +1026,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                           </span>
 
                           {/* Bar */}
-                          <div className="w-full max-w-[38px] bg-slate-100 rounded-t-lg relative overflow-hidden flex items-end justify-center" style={{ height: '110px' }}>
+                          <div className="w-full max-w-[44px] bg-slate-100 rounded-t-lg relative overflow-hidden flex items-end justify-center" style={{ height: '110px' }}>
                             <div
                               style={{ height: `${Math.max(d.count > 0 ? 12 : 2, heightPercent)}%` }}
                               className={`w-full rounded-t-md transition-all duration-500 ${
@@ -1053,7 +1052,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
 
                   <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 px-1">
                     <span>💡 Chú thích: Cột đỏ thể hiện ngày cao điểm cần tăng cường giám sát.</span>
-                    <span className="font-bold text-slate-700">T2 - T7</span>
+                    <span className="font-bold text-slate-700">T2 - T6</span>
                   </div>
                 </div>
               </div>
