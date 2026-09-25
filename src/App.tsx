@@ -6,7 +6,6 @@ import { DataIntakeTab } from './components/Tabs/DataIntakeTab';
 import { WeeklyReportTab } from './components/Tabs/WeeklyReportTab';
 import { StudentRosterTab } from './components/Tabs/StudentRosterTab';
 import { TT22EvaluationTab } from './components/Tabs/TT22EvaluationTab';
-import { FlexibleBaremTab } from './components/Tabs/FlexibleBaremTab';
 import { GoogleDriveTab } from './components/Tabs/GoogleDriveTab';
 import {
   initAuth,
@@ -40,6 +39,7 @@ import { ResetDataModal } from './components/ResetDataModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { hasGeminiApiKey } from './utils/geminiApiKey';
+import { getWeekCycleInfo, TimeFilterMode } from './utils/timeCycle';
 
 export const CLASS_DATA_STORAGE_KEY = 'edumaster_class_data';
 
@@ -108,9 +108,59 @@ export default function App() {
   const [activeWeek, setActiveWeek] = useState<number>(() => initialClassData?.activeWeek ?? 3);
   const [currentMonth, setCurrentMonth] = useState<number>(() => initialClassData?.currentMonth ?? 9);
   const [currentSemester, setCurrentSemester] = useState<1 | 2>(() => initialClassData?.currentSemester ?? 1);
+  const [timeFilterMode, setTimeFilterMode] = useState<TimeFilterMode>('week');
+  const [selectedMonthNum, setSelectedMonthNum] = useState<number>(9);
+  const [selectedSemesterNum, setSelectedSemesterNum] = useState<1 | 2>(1);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [hasUserApiKey, setHasUserApiKey] = useState<boolean>(() => hasGeminiApiKey());
+
+  // Chuỗi đại diện mốc thời gian đang được chọn trên Header
+  const currentTimeScope = React.useMemo(() => {
+    if (timeFilterMode === 'week') return `week-${activeWeek}`;
+    if (timeFilterMode === 'month') return `month-${selectedMonthNum}`;
+    if (timeFilterMode === 'semester') return `semester-${selectedSemesterNum}`;
+    return 'year';
+  }, [timeFilterMode, activeWeek, selectedMonthNum, selectedSemesterNum]);
+
+  // Bộ điều khiển đồng bộ thời gian từ dropdown Header
+  const handleChangeTimeScope = (val: string) => {
+    if (val.startsWith('week-')) {
+      const w = parseInt(val.replace('week-', ''), 10);
+      setTimeFilterMode('week');
+      setActiveWeek(w);
+      const info = getWeekCycleInfo(w);
+      setCurrentMonth(info.monthNumber);
+      setCurrentSemester(info.semester);
+    } else if (val.startsWith('month-')) {
+      const m = parseInt(val.replace('month-', ''), 10);
+      setTimeFilterMode('month');
+      setSelectedMonthNum(m);
+      setCurrentMonth(m);
+      if (activeTab !== 'report') {
+        setActiveTab('report');
+      }
+    } else if (val === 'semester-1') {
+      setTimeFilterMode('semester');
+      setSelectedSemesterNum(1);
+      setCurrentSemester(1);
+      if (activeTab !== 'report') {
+        setActiveTab('report');
+      }
+    } else if (val === 'semester-2') {
+      setTimeFilterMode('semester');
+      setSelectedSemesterNum(2);
+      setCurrentSemester(2);
+      if (activeTab !== 'report') {
+        setActiveTab('report');
+      }
+    } else if (val === 'year') {
+      setTimeFilterMode('year');
+      if (activeTab !== 'report') {
+        setActiveTab('report');
+      }
+    }
+  };
 
   // Operation States & Supabase Cloud Sync
   const [isExportingToDrive, setIsExportingToDrive] = useState(false);
@@ -398,7 +448,7 @@ export default function App() {
         homeroomFocusPoints: [
           `Khởi động phong trào thi đua nền nếp đầu Tháng ${toM}.`,
           'Kiểm tra rà soát dụng cụ học tập và đồng phục đầu tháng.',
-          'Động viên các tổ thi đua giữ vững hoa điểm tốt.',
+          'Động viên toàn thể học sinh thi đua giữ vững hoa điểm tốt.',
         ],
       },
     };
@@ -554,11 +604,11 @@ export default function App() {
       let content = `# BÁO CÁO CÔNG TÁC CHỦ NHIỆM - TUẦN ${activeReport.weekNumber}\n`;
       content += `${displayClass} • Năm học ${activeReport.academicYear} • Học kỳ ${activeReport.semester}\nThời gian: ${activeReport.dateRange}\n\n`;
       const indicators = activeReport.studentProblemsSummary?.indicators13 || activeReport.indicators || [];
-      content += `## MỤC 1: BẢNG SƠ KẾT THI ĐUA TUẦN (13 CHỈ SỐ)\n`;
+      content += `## MỤC 1: TỔNG HỢP NỀ NẾP & THEO DÕI HỌC SINH (13 CHỈ SỐ)\n`;
       indicators.forEach((i) => {
-        content += `${i.index}. ${i.title}: ${i.count} (${i.details}) -> ${i.pointsFormula || i.totalPoints || ''}\n`;
+        content += `${i.index}. ${i.title}: ${i.count} (${i.details})\n`;
       });
-      content += `\nTỔNG ĐIỂM THI ĐUA: ${activeReport.finalScore ?? activeReport.collectiveCompetition?.finalScore ?? 100}/100đ (${activeReport.estimatedRank ?? activeReport.collectiveCompetition?.estimatedRank ?? ''})\n\n`;
+      content += `\n`;
       content += `## MỤC 2: CẢNH BÁO & TIN NHẮN ZALO PHỤ HUYNH\n`;
       const alerts = activeReport.monthlyAlerts || activeReport.parentAlerts || [];
       alerts.forEach((pa) => {
@@ -593,6 +643,10 @@ export default function App() {
       <Header
         currentMonth={currentMonth}
         currentSemester={currentSemester}
+        activeWeek={activeWeek}
+        timeScopeValue={currentTimeScope}
+        onChangeTimeScope={handleChangeTimeScope}
+        onSelectWeek={(w) => handleChangeTimeScope(`week-${w}`)}
         onOpenResetModal={() => setIsResetModalOpen(true)}
         profile={profile}
         onOpenProfileSettings={() => setIsProfileModalOpen(true)}
@@ -617,6 +671,12 @@ export default function App() {
             students={students}
             baremRules={baremRules}
             currentWeek={activeWeek}
+            records={records}
+            reports={reports}
+            onUpdateRecords={(newRecs) => {
+              setRecords(newRecs);
+              showToast('Đã cập nhật nhật ký nề nếp!');
+            }}
             onApplyWeekData={handleApplyWeekData}
             onNavigateToReport={() => setActiveTab('report')}
             className={profile.className}
@@ -628,7 +688,7 @@ export default function App() {
           <WeeklyReportTab
             reports={reports}
             currentWeek={activeWeek}
-            onSelectWeek={setActiveWeek}
+            onSelectWeek={(w) => handleChangeTimeScope(`week-${w}`)}
             onSaveToDrive={handleQuickSaveToDrive}
             hasDriveToken={!!accessToken}
             isSavingToDrive={isExportingToDrive}
@@ -636,6 +696,10 @@ export default function App() {
             onOpenProfileSettings={() => setIsProfileModalOpen(true)}
             students={students}
             records={records}
+            filterMode={timeFilterMode}
+            selectedMonthNum={selectedMonthNum}
+            selectedSemesterNum={selectedSemesterNum}
+            onChangeTimeScope={handleChangeTimeScope}
           />
         )}
 
@@ -651,19 +715,6 @@ export default function App() {
 
         {activeTab === 'tt22' && (
           <TT22EvaluationTab students={students} records={records} />
-        )}
-
-        {activeTab === 'barem' && (
-          <FlexibleBaremTab
-            baremRules={baremRules}
-            className={profile.className}
-            onRequireApiKey={() => setIsApiKeyModalOpen(true)}
-            onUpdateBarem={(newRules) => {
-              setBaremRules(newRules);
-              showToast('Đã lưu quy tắc Barem điểm thi đua mới!');
-            }}
-            onResetToDefault={() => setBaremRules(DEFAULT_BAREM_RULES)}
-          />
         )}
 
         {activeTab === 'drive' && (

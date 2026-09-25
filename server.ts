@@ -88,7 +88,7 @@ app.post('/api/analyze-record', async (req, res) => {
     }
 
     const rosterText = Array.isArray(roster)
-      ? roster.map((s: any) => `STT ${s.stt}: ${s.name} (Tổ ${s.group}, Chức vụ: ${s.role || 'Học sinh'})`).join('\n')
+      ? roster.map((s: any) => `STT ${s.stt}: ${s.name} (Chức vụ: ${s.role || 'Học sinh'})`).join('\n')
       : '';
 
     const baremText = Array.isArray(baremRules)
@@ -96,34 +96,20 @@ app.post('/api/analyze-record', async (req, res) => {
       : '';
 
     const promptText = `
-Bạn là "EduMaster AI" – Trợ lý Số Quản trị Lớp học và Cố vấn Sư phạm dành riêng cho Giáo viên Chủ nhiệm (GVCN) cấp THCS, vận hành bám sát chuẩn nghiệp vụ Sổ Công Tác Chủ Nhiệm (SCN) và Quy chế đánh giá học sinh theo Thông tư 22/2021/TT-BGDĐT.
+Bạn là "EduMaster AI" – Trợ lý Số Quản trị Lớp học và Cố vấn Sư phạm dành riêng cho Giáo viên Chủ nhiệm (GVCN) cấp THCS, vận hành bám sát chuẩn nghiệp vụ Sổ Công Tác Chủ Nhiệm (SCN) và Quy chế đánh giá rèn luyện học sinh theo Thông tư 22/2021/TT-BGDĐT.
 
-HỆ THỐNG VẬN HÀNH CƠ CHẾ PHÂN TÁCH 2 LUỒNG DỮ LIỆU ĐỘC LẬP:
-- LUỒNG 1 (ĐIỂM THI ĐUA TẬP THỂ LỚP): Chỉ tính toán điểm thi đua tuần của lớp dựa trên điểm trừ từ Sổ Sao Đỏ và Xếp loại tiết học trong Sổ Đầu Bài.
-  * Điểm chuẩn ban đầu: 100 điểm.
-  * Điểm trừ từ Xếp loại tiết học Sổ đầu bài: Tiết Tốt (không trừ), Tiết Khá (trừ 1đ/tiết), Tiết TB (trừ 2đ/tiết), Tiết Chưa đạt (trừ 5đ/tiết).
-  * Điểm trừ từ Sổ Sao Đỏ trường: Lỗi tập thể bị Sao đỏ ghi nhận (trừ theo quy định).
-  * TUYỆT ĐỐI KHÔNG trừ điểm lớp vì lỗi cá nhân học sinh trừ khi bị Sao đỏ ghi nhận!
-- LUỒNG 2 (HỒ SƠ CÁ NHÂN HỌC SINH): Tích hợp toàn bộ lỗi vi phạm, điểm số, tác phong cụ thể vào từng học sinh. QUẢN LÝ CẢNH BÁO THEO CHU KỲ THÁNG.
+NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
+1. TRỌNG TÂM: NHẬT KÝ NỀ NẾP & THEO DÕI HỌC SINH TRONG TUẦN.
+2. TUYỆT ĐỐI KHÔNG TÍNH ĐIỂM SỐ, KHÔNG GÁN ĐIỂM TRỪ HOẶC ĐIỂM CỘNG. Điểm thi đua của trường đã có bộ phận khác tính riêng bên ngoài.
+3. BÓC TÁCH CHÍNH XÁC 5 TRƯỜNG THÔNG TIN MỖI LƯỢT GHI NHẬN:
+   - [Ngày / Thứ]: VD "Thứ Hai", ngày "21/09/2026"
+   - [Tiết / Môn học]: VD "Tiết 1", môn "Toán"
+   - [Tên học sinh liên quan]: Đối chiếu chính xác theo danh sách lớp được cung cấp. Nếu ghi nhận của cả lớp (VD: Tiết học tốt, lớp ồn ào), ghi tên "Cả lớp".
+   - [Hành vi / Lỗi vi phạm cụ thể]: Ghi nhận khách quan, trung thực (VD: "Nói chuyện riêng nhiều lần trong giờ học", "Quên sách giáo khoa và bài tập về nhà", "Đi học muộn 15 phút", "Đạt điểm 10 kiểm tra miệng").
+   - [Nhận xét của GV bộ môn / Biện pháp giáo dục]: Lời phê của giáo viên bộ môn trong sổ hoặc biện pháp GVCN cần lưu ý.
 
-NGUYÊN TẮC CẢNH BÁO VÀ GỢI Ý TIN NHẮN PHỤ HUYNH THEO THÁNG:
-- Tuyệt đối không gửi tin nhắn dồn dập hàng tuần cho những sơ suất nhỏ lẻ.
-- Mức bình thường (1-2 lỗi/tháng): Chỉ ghi nhận vào SCN và nhắc nhở trên lớp. TUYỆT ĐỐI KHÔNG xuất tin nhắn gửi phụ huynh.
-- Mức vi phạm nhiều (TỪ 3 LỖI TRỞ LÊN TRONG THÁNG): Lập tức kích hoạt cảnh báo tháng và soạn sẵn tin nhắn Zalo tổng hợp TOÀN BỘ các lần vi phạm trong cả tháng của học sinh (nêu rõ Ngày, Tiết, Môn từng lần).
-- Ngoại lệ: Lỗi nghiêm trọng (đánh nhau, vô lễ GV, thuốc lá điện tử, trốn tiết...) cảnh báo ngay trong tuần phát sinh.
-
-QUY CHUẨN GHI CHÉP BẢNG MỤC 4 SỔ CHỦ NHIỆM (THEO DÕI HỌC SINH):
-1. TÁCH BẠCH HOÀN TOÀN ĐIỂM THI ĐUA: Điểm thi đua & điểm trừ (-1đ, -2đ, trừ điểm thi đua lớp...) CHỈ ĐƯỢC PHÉP xuất hiện duy nhất ở Luồng 1 (Điểm thi đua tập thể). TUYỆT ĐỐI KHÔNG ghi bất kỳ điểm trừ thi đua nào vào Mục 4 (Nhật ký cá nhân). CẤM ghi: "(-2đ thi đua)", "bị trừ 1 điểm", "trừ điểm lớp".
-2. CỘT "BIỂU HIỆN CỤ THỂ" (CỘT 3): Chỉ ghi thuần túy sự thật khách quan gồm: Ngày/Thứ, Tiết mấy, Môn gì, và Hành vi hoặc Điểm kiểm tra môn học. (Ví dụ: "Tiết 2 môn Toán: Đạt điểm 10 kiểm tra miệng", "Tiết 4 môn Lịch sử: Quên mang sách giáo khoa và chưa ghi chép bài").
-3. CỘT "BIỆN PHÁP GIÁO DỤC" (CỘT 4): Chỉ ghi biện pháp sư phạm của GVCN: Động viên / Nhắc nhở / Trao đổi riêng / Giao bạn cán sự kèm cặp / Gửi tin nhắn Zalo PH / Yêu cầu viết bản kiểm điểm. Tuyệt đối không ghi giải thích rườm rà như "(Mức 1 lỗi chưa gửi tin PH)" hay "(dưới 3 lỗi nên chỉ nhắc nhở)".
-
-ĐỊNH DANH VI PHẠM BẮT BUỘC: Đủ 4 trường: [Ngày/Thứ] - [Tiết học] - [Tên Môn học] - [Hành vi cụ thể].
-
-DANH SÁCH LỚP CHÍNH THỨC (ROSTER ĐỐI CHIẾU):
+DANH SÁCH HỌC SINH LỚP CHÍNH THỨC (ROSTER ĐỐI CHIẾU):
 ${rosterText}
-
-BAREM ĐIỂM THI ĐUA ĐANG ÁP DỤNG:
-${baremText}
 
 ${textInput ? `NỘI DUNG VĂN BẢN ĐƯỢC CUNG CẤP:\n${textInput}` : 'HÃY BÓC TÁCH TOÀN BỘ TỪ ẢNH CHỤP ĐƯỢC ĐÍNH KÈM.'}
 
@@ -133,29 +119,41 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
   "monthNumber": 9,
   "monthName": "Tháng 9/2026",
   "dateRange": "Từ ngày ... đến ngày ...",
-  "collectiveCompetition": {
-    "startingPoints": 100,
-    "periodDeductions": 1,
-    "periodDetails": "... tiết Khá/TB/Chưa đạt, trừ ... điểm",
-    "saoDoDeductions": 2,
-    "saoDoDetails": "Lỗi tập thể bị Sao đỏ bắt, trừ ... điểm",
-    "finalScore": 97,
-    "estimatedRank": "Hạng ... / 12 lớp"
+  "events": [
+    {
+      "studentName": "Nguyễn Văn A",
+      "dayOfWeek": "Thứ Hai",
+      "date": "21/09/2026",
+      "period": 1,
+      "subject": "Toán",
+      "behavior": "Quên mang vở bài tập và không chú ý nghe giảng",
+      "teacherNote": "Nhắc nhở làm bài bù",
+      "category": "hoc_tap | dong_phuc | di_muon | ve_sinh | mat_trat_tu | chuyen_can | khen_thuong | khac",
+      "severity": "nhe | trung_binh | nang | khen_thuong"
+    }
+  ],
+  "statistics": {
+    "totalViolations": 5,
+    "byCategory": {
+      "hoc_tap": 2,
+      "dong_phuc": 1,
+      "di_muon": 1,
+      "ve_sinh": 0,
+      "mat_trat_tu": 1,
+      "chuyen_can": 0,
+      "khen_thuong": 2
+    },
+    "topStudents": [
+      { "name": "Nguyễn Văn A", "count": 2, "mainIssues": "Quên bài tập; Đi muộn" }
+    ]
   },
-  "studentWeeklyIndicators": [
-    { "index": 1, "title": "Số học sinh nghỉ học", "count": 0, "details": "..." },
-    { "index": 2, "title": "Số đi muộn", "count": 0, "details": "..." },
-    { "index": 3, "title": "Số bỏ tiết", "count": 0, "details": "..." },
-    { "index": 4, "title": "Không chuẩn bị bài / Quên vở", "count": 0, "details": "..." },
-    { "index": 5, "title": "Điểm kiểm tra dưới 5.0", "count": 0, "details": "..." },
-    { "index": 6, "title": "Mắc thái độ sai", "count": 0, "details": "..." },
-    { "index": 7, "title": "Điểm tốt (8, 9, 10)", "count": 0, "details": "..." },
-    { "index": 8, "title": "Việc tốt / Tuyên dương", "count": 0, "details": "..." },
-    { "index": 9, "title": "Học sinh được khen", "count": 0, "details": "..." },
-    { "index": 10, "title": "Học sinh bị phê bình", "count": 0, "details": "..." },
-    { "index": 11, "title": "Tiết trống", "count": 0, "details": "..." },
-    { "index": 12, "title": "Tiết tự quản tốt", "count": 0, "details": "..." },
-    { "index": 13, "title": "Đánh giá chung nề nếp tuần", "count": 1, "details": "..." }
+  "scnJournalEntries": [
+    {
+      "date": "DD/MM/YYYY",
+      "studentName": "...",
+      "details": "Tiết ... môn ...: Hành vi cụ thể",
+      "educationalMeasure": "Nhắc nhở, rút kinh nghiệm"
+    }
   ],
   "monthlyParentAlerts": [
     {
@@ -171,48 +169,12 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
       "messageZalo": "Dạ kính gửi phụ huynh em [Tên]. Thầy/Cô chủ nhiệm lớp xin gửi lời chào gia đình ạ.\nTrong tháng vừa qua, nhìn chung em có cố gắng trong sinh hoạt tập thể. Tuy nhiên, về mặt nề nếp và học tập, em có tích lũy [Số lần] lần nhắc nhở:\n- [Ngày DD/MM, Tiết Y môn Z]: [Lỗi]\nDo số lần vi phạm đã vượt mức quy định của lớp, Thầy/Cô rất mong gia đình dành thời gian trò chuyện, nhắc nhở thêm tại nhà để tháng tới em chấn chỉnh nề nếp, tránh làm ảnh hưởng đến kết quả rèn luyện định kỳ của em. Thầy/Cô cảm ơn sự phối hợp của gia đình ạ!"
     }
   ],
-  "monthStatusNote": "Tháng này nề nếp học sinh vẫn trong ngưỡng kiểm soát (dưới 3 lỗi), chưa cần gửi tin nhắn cảnh báo phụ huynh.",
-  "scnJournalEntries": [
-    {
-      "date": "DD/MM/YYYY",
-      "studentName": "...",
-      "details": "Tiết ... môn ...: Hành vi/Điểm số",
-      "educationalMeasure": "Nhắc nhở, động viên / Giao cán sự kèm / Báo PH..."
-    }
-  ],
-  "events": [
-    {
-      "studentName": "...",
-      "dayOfWeek": "Thứ ...",
-      "date": "DD/MM/YYYY",
-      "period": 1,
-      "subject": "...",
-      "behavior": "...",
-      "category": "di_muon | quen_bai | mat_trat_tu | diem_duoi_5 | diem_tot | viec_tot | khac",
-      "pointsImpact": -2,
-      "educationalMeasure": "...",
-      "severity": "nhe | trung_binh | nang | khen_thuong"
-    }
-  ],
+  "monthStatusNote": "Tháng này nề nếp học sinh vẫn trong ngưỡng kiểm soát.",
   "ambiguousNames": [],
   "tt22Forecast": {
-    "atRiskStudents": [
-      {
-        "name": "...",
-        "stt": 1,
-        "errorsCount": 3,
-        "commonSubjects": ["..."],
-        "predictedRank": "Khá"
-      }
-    ],
-    "exemplaryStudents": [
-      { "name": "...", "stt": 1, "goodPointsCount": 1 }
-    ],
-    "homeroomFocusPoints": [
-      "Trọng tâm 1...",
-      "Trọng tâm 2...",
-      "Trọng tâm 3..."
-    ]
+    "atRiskStudents": [],
+    "exemplaryStudents": [],
+    "homeroomFocusPoints": ["Kiểm tra bài tập đầu giờ", "Nhắc nhở tác phong trang phục"]
   }
 }
 `;
@@ -228,30 +190,48 @@ BẮT BUỘC TRẢ VỀ ĐỊNH DẠNG JSON HỢP LỆ (chỉ JSON thuần túy,
     }
     parts.push({ text: promptText });
 
-    // Model: gemini-3.8-flash
+    // Model: gemini-3.8-flash with auto-retry on 503/429 (no fallback models)
     const client = getGeminiClient(req);
     let responseText = '';
-    try {
-      const result = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: { parts },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        },
-      });
-      responseText = result.text || '';
-    } catch (primaryError: any) {
-      console.warn('Model gemini-3.8-flash attempt failed, retrying:', primaryError?.message);
-      const fallbackResult = await client.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: { parts },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        },
-      });
-      responseText = fallbackResult.text || '';
+    const maxRetries = 3;
+    let lastErr: any = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await client.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: { parts },
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          },
+        });
+        responseText = result.text || '';
+        if (responseText) break;
+      } catch (err: any) {
+        lastErr = err;
+        const status = err?.status;
+        const msg = String(err?.message || '');
+        const isOverloaded =
+          status === 503 ||
+          status === 429 ||
+          msg.includes('high demand') ||
+          msg.includes('overloaded') ||
+          msg.includes('resource_exhausted') ||
+          msg.includes('RESOURCE_EXHAUSTED');
+
+        if (isOverloaded && attempt < maxRetries) {
+          console.warn(`[gemini-3.8-flash] 503/429 encountered, auto-retrying (${attempt + 1}/${maxRetries}) in 1.5s...`);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!responseText && lastErr) {
+      throw lastErr;
     }
 
     if (!responseText) {
@@ -313,27 +293,45 @@ Bắt buộc trả về JSON Array thuần túy (không kèm markdown):
 
     const client = getGeminiClient(req);
     let responseText = '';
-    try {
-      const result = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: { parts },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        },
-      });
-      responseText = result.text || '';
-    } catch (primaryErr: any) {
-      console.warn('gemini-3.8-flash barem parse failed, retrying fallback:', primaryErr?.message);
-      const fbResult = await client.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: { parts },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        },
-      });
-      responseText = fbResult.text || '';
+    const maxRetries = 3;
+    let lastErr: any = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await client.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: { parts },
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          },
+        });
+        responseText = result.text || '';
+        if (responseText) break;
+      } catch (err: any) {
+        lastErr = err;
+        const status = err?.status;
+        const msg = String(err?.message || '');
+        const isOverloaded =
+          status === 503 ||
+          status === 429 ||
+          msg.includes('high demand') ||
+          msg.includes('overloaded') ||
+          msg.includes('resource_exhausted') ||
+          msg.includes('RESOURCE_EXHAUSTED');
+
+        if (isOverloaded && attempt < maxRetries) {
+          console.warn(`[gemini-3.8-flash] Barem parse retry (${attempt + 1}/${maxRetries}) in 1.5s...`);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!responseText && lastErr) {
+      throw lastErr;
     }
 
     let cleaned = (responseText || '[]').replace(/```json/gi, '').replace(/```/g, '').trim();

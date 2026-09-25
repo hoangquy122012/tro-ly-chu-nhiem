@@ -3,10 +3,6 @@ export type StudentRole =
   | 'Lớp phó học tập'
   | 'Lớp phó kỷ luật'
   | 'Lớp phó lao động'
-  | 'Tổ trưởng Tổ 1'
-  | 'Tổ trưởng Tổ 2'
-  | 'Tổ trưởng Tổ 3'
-  | 'Tổ trưởng Tổ 4'
   | 'Cán sự bộ môn'
   | 'Học sinh';
 
@@ -17,7 +13,7 @@ export interface Student {
   stt: number;
   name: string;
   gender: 'Nam' | 'Nữ';
-  group: number; // 1, 2, 3, 4 (Tổ)
+  group?: number; // Đã loại bỏ khái niệm Tổ, để optional cho tương thích
   role: StudentRole;
   parentName?: string;
   parentPhone?: string;
@@ -33,6 +29,9 @@ export type ViolationCategory =
   | 'thai_do_sai'
   | 'mat_trat_tu'
   | 'khong_dong_phuc'
+  | 'hoc_tap'
+  | 'dong_phuc'
+  | 've_sinh'
   | 'diem_tot'
   | 'viec_tot'
   | 'khen_thuong'
@@ -57,6 +56,8 @@ export interface BehaviorRecord {
   semester: 1 | 2;
   month: number; // 9, 10, 11, 12, ...
   timestamp: string;
+  isReminded?: boolean; // Đã nhắc nhở
+  isParentContacted?: boolean; // Đã liên hệ PH
 }
 
 export interface BaremRule {
@@ -108,7 +109,6 @@ export interface MonthlyParentAlert {
   studentId: string;
   studentName: string;
   stt: number;
-  group?: string;
   monthNumber?: number; // 9
   monthName?: string; // "Tháng 9/2026"
   weeklyErrorsCount?: number;
@@ -198,10 +198,8 @@ export interface DriveSavedFile {
 export interface ClassOfficers {
   classLeader?: string; // Lớp trưởng
   viceLeader?: string; // Lớp phó
-  groupLeader1?: string; // Tổ trưởng Tổ 1
-  groupLeader2?: string; // Tổ trưởng Tổ 2
-  groupLeader3?: string; // Tổ trưởng Tổ 3
-  groupLeader4?: string; // Tổ trưởng Tổ 4
+  studyLeader?: string; // Lớp phó học tập
+  disciplineLeader?: string; // Lớp phó kỷ luật
 }
 
 export interface SystemProfile {

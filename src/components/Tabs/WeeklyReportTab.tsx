@@ -18,8 +18,6 @@ import {
   Sparkles,
   Sliders,
   ExternalLink,
-  Search,
-  Filter,
   ChevronRight,
   UserCheck,
   AlertOctagon,
@@ -47,7 +45,6 @@ import {
   SCHOOL_YEAR_WEEKS,
   MONTH_LIST,
   getWeekCycleInfo,
-  parseTimeQuery,
   TimeFilterMode,
 } from '../../utils/timeCycle';
 
@@ -62,6 +59,10 @@ interface WeeklyReportTabProps {
   onOpenProfileSettings?: () => void;
   students?: Student[];
   records?: BehaviorRecord[];
+  filterMode?: TimeFilterMode;
+  selectedMonthNum?: number;
+  selectedSemesterNum?: 1 | 2;
+  onChangeTimeScope?: (scope: string) => void;
 }
 
 export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
@@ -75,18 +76,23 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
   onOpenProfileSettings,
   students = [],
   records = [],
+  filterMode: propFilterMode,
+  selectedMonthNum: propSelectedMonthNum,
+  selectedSemesterNum: propSelectedSemesterNum,
+  onChangeTimeScope,
 }) => {
-  // PHẦN 2: BỘ LỌC XEM DỮ LIỆU ĐA TẦNG
-  const [filterMode, setFilterMode] = useState<TimeFilterMode>('week');
-  const [selectedWeekNum, setSelectedWeekNum] = useState<number>(currentWeek);
-  const [selectedMonthNum, setSelectedMonthNum] = useState<number>(9);
-  const [selectedSemesterNum, setSelectedSemesterNum] = useState<1 | 2>(1);
-  const [queryCommand, setQueryCommand] = useState<string>('');
-  const [queryFeedback, setQueryFeedback] = useState<string | null>(null);
+  // Đồng bộ chế độ thời gian trực tiếp từ Header Dropdown
+  const [localFilterMode, setLocalFilterMode] = useState<TimeFilterMode>('week');
+  const [localSelectedMonthNum, setLocalSelectedMonthNum] = useState<number>(9);
+  const [localSelectedSemesterNum, setLocalSelectedSemesterNum] = useState<1 | 2>(1);
+
+  const filterMode = propFilterMode ?? localFilterMode;
+  const selectedWeekNum = currentWeek;
+  const selectedMonthNum = propSelectedMonthNum ?? localSelectedMonthNum;
+  const selectedSemesterNum = propSelectedSemesterNum ?? localSelectedSemesterNum;
 
   // Profile lookup in Semester / Year mode
   const [inspectedStudentId, setInspectedStudentId] = useState<string>(students[0]?.id || 'hs_12');
-  const [searchStudentTerm, setSearchStudentTerm] = useState<string>('');
 
   // UI state
   const [copiedZaloIndex, setCopiedZaloIndex] = useState<number | null>(null);
@@ -97,38 +103,6 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
 
   // Active report for Week mode
   const activeReport = reports.find((r) => r.weekNumber === selectedWeekNum) || reports[0];
-
-  // =========================================================================
-  // QUERY COMMAND PARSER ("Xem Tuần [X]", "Xem Tháng [X]", "Xem Học kỳ 1", "Xem Cả năm")
-  // =========================================================================
-  const handleExecuteQuery = (textToParse?: string) => {
-    const text = (textToParse !== undefined ? textToParse : queryCommand).trim();
-    if (!text) return;
-
-    const parsed = parseTimeQuery(text);
-    if (!parsed) {
-      setQueryFeedback('Không nhận diện được thời gian. Thử: "Xem Tuần 3", "Xem Tháng 9", "Xem Học kỳ 1", "Xem Cả năm"');
-      return;
-    }
-
-    if (parsed.mode === 'week' && parsed.weekNumber) {
-      setFilterMode('week');
-      setSelectedWeekNum(parsed.weekNumber);
-      onSelectWeek(parsed.weekNumber);
-      setQueryFeedback(`Đã chuyển sang xem Báo cáo: TUẦN ${parsed.weekNumber}`);
-    } else if (parsed.mode === 'month' && parsed.monthNumber) {
-      setFilterMode('month');
-      setSelectedMonthNum(parsed.monthNumber);
-      setQueryFeedback(`Đã kích hoạt Bộ lọc Tổng kết: THÁNG ${parsed.monthNumber}`);
-    } else if (parsed.mode === 'semester' && parsed.semester) {
-      setFilterMode('semester');
-      setSelectedSemesterNum(parsed.semester);
-      setQueryFeedback(`Đã kích hoạt Bộ lọc: HỌC KỲ ${parsed.semester}`);
-    } else if (parsed.mode === 'year') {
-      setFilterMode('year');
-      setQueryFeedback('Đã kích hoạt Tổng kết CẢ NĂM HỌC (35 tuần)');
-    }
-  };
 
   // =========================================================================
   // DATA CALCULATORS FOR MULTI-TIER CYCLES
@@ -289,7 +263,6 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
           studentId: s.id,
           studentName: s.name,
           stt: s.stt,
-          group: `Tổ ${s.group}`,
           phone: s.parentPhone || '09123456xx',
           parentName: s.parentName || 'Phụ huynh',
           monthNumber: selectedMonthNum,
@@ -523,14 +496,12 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
     // HTML format for rich-text paste into Excel and Word preserving borders and styles
     const htmlRows = indicators
       .map((ind) => {
-        const points = getIndicatorDeduction(ind);
         const detailsClean = ind.details || 'Không ghi nhận';
         return `<tr>
           <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center; font-weight: bold;">${ind.index}</td>
           <td style="padding: 6px 10px; border: 1px solid #333333; font-weight: 600;">${ind.title}</td>
           <td style="padding: 6px 10px; border: 1px solid #333333;">${detailsClean}</td>
           <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center; font-weight: bold;">${ind.count}</td>
-          <td style="padding: 6px 10px; border: 1px solid #333333; text-align: center; font-weight: bold;">${points}</td>
         </tr>`;
       })
       .join('\n');
@@ -542,7 +513,6 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
       <th style="padding: 8px 10px; border: 1px solid #333333; text-align: left; width: 220px;">Chỉ số vi phạm</th>
       <th style="padding: 8px 10px; border: 1px solid #333333; text-align: left;">Danh sách học sinh &amp; Số lần</th>
       <th style="padding: 8px 10px; border: 1px solid #333333; width: 110px;">Tổng số lượt</th>
-      <th style="padding: 8px 10px; border: 1px solid #333333; width: 100px;">Điểm trừ</th>
     </tr>
   </thead>
   <tbody>
@@ -551,11 +521,10 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
 </table>`;
 
     // Tab-delimited format for plain text paste
-    let tsv = `STT\tChỉ số vi phạm\tDanh sách học sinh & Số lần\tTổng số lượt\tĐiểm trừ\n`;
+    let tsv = `STT\tChỉ số vi phạm\tDanh sách học sinh & Số lần\tTổng số lượt\n`;
     indicators.forEach((ind) => {
-      const points = getIndicatorDeduction(ind);
       const detailsClean = (ind.details || 'Không ghi nhận').replace(/\t/g, ' ').replace(/\n/g, ' ');
-      tsv += `${ind.index}\t${ind.title}\t${detailsClean}\t${ind.count}\t${points}\n`;
+      tsv += `${ind.index}\t${ind.title}\t${detailsClean}\t${ind.count}\n`;
     });
 
     try {
@@ -612,6 +581,19 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {activeReport && (
+              <button
+                type="button"
+                onClick={() => onSaveToDrive(activeReport)}
+                disabled={isSavingToDrive}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-semibold text-blue-200 transition cursor-pointer"
+                title="Lưu báo cáo vào Google Drive"
+              >
+                <Cloud className="w-3.5 h-3.5 text-cyan-300" />
+                <span>{isSavingToDrive ? 'Đang lưu...' : 'Lưu Drive'}</span>
+              </button>
+            )}
+
             {onOpenProfileSettings && (
               <button
                 onClick={onOpenProfileSettings}
@@ -638,254 +620,14 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
       </div>
 
       {/* =========================================================================
-          INTERACTIVE TIME COMMAND QUERY BAR (PHẦN 2)
-          ========================================================================= */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleExecuteQuery();
-          }}
-          className="flex flex-wrap sm:flex-nowrap items-center gap-2"
-        >
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={queryCommand}
-              onChange={(e) => setQueryCommand(e.target.value)}
-              placeholder="Nhập lệnh tra cứu (VD: 'Xem Tuần 3', 'Xem Tháng 9', 'Tổng kết Tháng 10', 'Xem Học kỳ 1', 'Xem Cả năm')..."
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white"
-            />
-          </div>
-          <button
-            type="submit"
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-bold shadow-xs transition shrink-0"
-          >
-            <span>Tra cứu</span>
-          </button>
-        </form>
-
-        {queryFeedback && (
-          <div className="text-xs text-blue-700 font-semibold flex items-center gap-1.5 px-2">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{queryFeedback}</span>
-          </div>
-        )}
-
-        {/* Quick query chips */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-1">
-            Lệnh nhanh:
-          </span>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Xem Tuần 3')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            🔍 Xem Tuần 3
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Xem Tuần 4')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            🔍 Xem Tuần 4
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Xem Tháng 9')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            📅 Xem Tháng 9 (Tuần 1-4)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Tổng kết Tháng 10')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            📅 Tổng kết Tháng 10
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Xem Học kỳ 1')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            🎓 Xem Học kỳ 1 (Tuần 1-18)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Xem Học kỳ 2')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            🎓 Xem Học kỳ 2 (Tuần 19-35)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExecuteQuery('Xem Cả năm')}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition"
-          >
-            🏆 Xem Cả năm (35 Tuần)
-          </button>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          MULTI-TIER CYCLE NAVIGATION (4 CHU KỲ TRUY VẤN)
-          ========================================================================= */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-4">
-        {/* Tier 1 Switcher Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div className="flex rounded-xl bg-slate-100 p-1">
-            <button
-              onClick={() => setFilterMode('week')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                filterMode === 'week' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>1. Theo Tuần (Tuần 1 - 35)</span>
-            </button>
-            <button
-              onClick={() => setFilterMode('month')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                filterMode === 'month' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>2. Theo Tháng (Tháng 9 - 5)</span>
-            </button>
-            <button
-              onClick={() => setFilterMode('semester')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                filterMode === 'semester' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>3. Theo Học Kỳ (HK1 &amp; HK2)</span>
-            </button>
-            <button
-              onClick={() => setFilterMode('year')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                filterMode === 'year' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5" />
-              <span>4. Tổng Kết Cả Năm</span>
-            </button>
-          </div>
-
-          {/* Quick Actions (Save Drive, JSON) */}
-          <div className="flex items-center gap-2">
-            {activeReport && (
-              <button
-                onClick={() => onSaveToDrive(activeReport)}
-                disabled={isSavingToDrive}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs disabled:opacity-50 transition"
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>{isSavingToDrive ? 'Đang lưu...' : 'Lưu Drive'}</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Tier 2: Sub-selector based on selected Mode */}
-        {filterMode === 'week' && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold text-slate-700">Chọn Tuần Học (Trục 35 tuần):</span>
-              <span>Đang xem: <strong>Tuần {selectedWeekNum} ({getWeekCycleInfo(selectedWeekNum).dateRange})</strong></span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
-              {SCHOOL_YEAR_WEEKS.map((w) => {
-                const hasReport = reports.some((r) => r.weekNumber === w.weekNumber);
-                const isSelected = w.weekNumber === selectedWeekNum;
-                return (
-                  <button
-                    key={w.weekNumber}
-                    onClick={() => {
-                      setSelectedWeekNum(w.weekNumber);
-                      onSelectWeek(w.weekNumber);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : hasReport
-                        ? 'bg-white text-slate-800 border border-blue-200 hover:border-blue-400'
-                        : 'bg-white/60 text-slate-400 border border-slate-200 hover:text-slate-700'
-                    }`}
-                  >
-                    <span>T{w.weekNumber}</span>
-                    {hasReport && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-500'}`} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {filterMode === 'month' && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold text-slate-700">Chọn Tháng Cần Báo Cáo &amp; Kích Hoạt Cảnh Báo Phụ Huynh:</span>
-              <span>Gồm: <strong>Tuần {monthData.monthWeeks.join(', ')}</strong></span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {MONTH_LIST.map((m) => {
-                const isSel = m.monthNumber === selectedMonthNum;
-                return (
-                  <button
-                    key={m.monthNumber}
-                    onClick={() => setSelectedMonthNum(m.monthNumber)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                      isSel
-                        ? 'bg-blue-700 text-white shadow-xs'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <span>{m.monthName}</span>
-                    <span className="text-[10px] opacity-75">(Tuần {m.weeks[0]}-{m.weeks[m.weeks.length - 1]})</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {filterMode === 'semester' && (
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-slate-700">Chọn Học Kỳ:</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSelectedSemesterNum(1)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-                  selectedSemesterNum === 1
-                    ? 'bg-blue-700 text-white shadow-xs'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-              >
-                Học Kỳ I (Tuần 1 - Tuần 18)
-              </button>
-              <button
-                onClick={() => setSelectedSemesterNum(2)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-                  selectedSemesterNum === 2
-                    ? 'bg-blue-700 text-white shadow-xs'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-              >
-                Học Kỳ II (Tuần 19 - Tuần 35)
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* =========================================================================
           VIEW 1: THEO TUẦN CỤ THỂ (13 CHỈ SỐ, THI ĐUA TUẦN, SCN TUẦN)
           ========================================================================= */}
-      {filterMode === 'week' && activeReport && (
+      {filterMode === 'week' && activeReport && (() => {
+        const currentWeekRecords = records.filter((r) => r.weekNumber === activeReport.weekNumber);
+        const uniqueViolatorsCount = new Set(currentWeekRecords.map((r: BehaviorRecord) => r.studentName)).size;
+        const goodCount = Math.max(0, (students.length || 36) - uniqueViolatorsCount);
+
+        return (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-10">
           {/* Header */}
           <div className="border-b-2 border-slate-900 pb-5">
@@ -902,46 +644,46 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                 </p>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
-                <span className="text-[11px] font-bold text-slate-500 uppercase block">Điểm thi đua tuần</span>
+              <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3 text-right">
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Tổng Lượt Ghi Nhận Tuần</span>
                 <div className="flex items-baseline justify-end gap-1 mt-0.5">
-                  <span className="text-2xl font-black text-blue-700">{weekColl.finalScore}</span>
-                  <span className="text-xs text-slate-500">/ 100đ</span>
+                  <span className="text-2xl font-black text-indigo-700">{currentWeekRecords.length}</span>
+                  <span className="text-xs text-slate-500">lượt</span>
                 </div>
-                <span className="text-xs font-bold text-emerald-700">{weekColl.estimatedRank}</span>
+                <span className="text-xs font-bold text-emerald-700">Đánh giá TT22</span>
               </div>
             </div>
           </div>
 
-          {/* MỤC 1: BẢNG SƠ KẾT THI ĐUA TẬP THỂ LỚP */}
+          {/* MỤC 1: TỔNG QUAN NỀ NẾP & RÈN LUYỆN LỚP TRONG TUẦN */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
               <span className="w-2.5 h-6 bg-blue-600 rounded-full inline-block"></span>
               <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase">
-                MỤC 1: BẢNG SƠ KẾT THI ĐUA TẬP THỂ LỚP (SỔ ĐẦU BÀI &amp; SAO ĐỎ)
+                MỤC 1: TỔNG QUAN NỀ NẾP &amp; RÈN LUYỆN LỚP TRONG TUẦN
               </h2>
             </div>
 
             <div className="bg-blue-50/50 rounded-xl border border-blue-200 p-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-3 bg-white rounded-lg border border-blue-100">
-                  <span className="text-xs font-bold text-slate-600 uppercase block">1. Điểm Chuẩn Khởi Đầu</span>
-                  <span className="text-2xl font-black text-slate-900 block mt-1">100 điểm</span>
-                  <p className="text-[11px] text-slate-500 mt-1">Mốc thi đua ban đầu của tuần</p>
+                  <span className="text-xs font-bold text-slate-600 uppercase block">1. Tổng Lượt Ghi Nhận</span>
+                  <span className="text-2xl font-black text-slate-900 block mt-1">{currentWeekRecords.length} lượt</span>
+                  <p className="text-[11px] text-slate-500 mt-1">Phục vụ đánh giá rèn luyện định kỳ</p>
                 </div>
                 <div className="p-3 bg-white rounded-lg border border-rose-100">
-                  <span className="text-xs font-bold text-rose-700 uppercase block">2. Trừ Tiết Học (Sổ Đầu Bài)</span>
+                  <span className="text-xs font-bold text-rose-700 uppercase block">2. Học Sinh Cần Lưu Ý</span>
                   <span className="text-2xl font-black text-rose-700 block mt-1">
-                    -{weekColl.periodDeductions || 0} điểm
+                    {uniqueViolatorsCount} học sinh
                   </span>
-                  <p className="text-[11px] text-slate-600 mt-1">{weekColl.periodDetails || 'Đảm bảo 100% tiết Tốt'}</p>
+                  <p className="text-[11px] text-slate-600 mt-1">Đã được GVCN theo dõi và phối hợp phụ huynh</p>
                 </div>
-                <div className="p-3 bg-white rounded-lg border border-amber-100">
-                  <span className="text-xs font-bold text-amber-700 uppercase block">3. Trừ Sổ Sao Đỏ (Liên Đội)</span>
-                  <span className="text-2xl font-black text-amber-700 block mt-1">
-                    -{weekColl.saoDoDeductions || 0} điểm
+                <div className="p-3 bg-white rounded-lg border border-emerald-100">
+                  <span className="text-xs font-bold text-emerald-700 uppercase block">3. Tình Hình Chung (TT22)</span>
+                  <span className="text-2xl font-black text-emerald-700 block mt-1">
+                    {goodCount} HS tốt
                   </span>
-                  <p className="text-[11px] text-slate-600 mt-1">{weekColl.saoDoDetails || 'Không có vi phạm tập thể'}</p>
+                  <p className="text-[11px] text-slate-600 mt-1">Học sinh không có vi phạm trong tuần</p>
                 </div>
               </div>
             </div>
@@ -995,12 +737,10 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                     <th className="py-2.5 px-4 w-60">Chỉ số vi phạm</th>
                     <th className="py-2.5 px-4">Danh sách học sinh &amp; Số lần</th>
                     <th className="py-2.5 px-3 w-28 text-center">Tổng số lượt</th>
-                    <th className="py-2.5 px-3 w-28 text-center">Điểm trừ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {weekIndicators.map((ind) => {
-                    const points = getIndicatorDeduction(ind);
                     return (
                       <tr key={ind.index} className="hover:bg-slate-50 transition">
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-500">{ind.index}</td>
@@ -1008,11 +748,6 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                         <td className="py-2.5 px-4 text-slate-700">{ind.details}</td>
                         <td className="py-2.5 px-3 text-center font-black">
                           <span className={ind.count > 0 ? 'text-blue-700' : 'text-slate-400'}>{ind.count}</span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-bold">
-                          <span className={points.startsWith('-') ? 'text-rose-600' : points.startsWith('+') ? 'text-emerald-600' : 'text-slate-400'}>
-                            {points}
-                          </span>
                         </td>
                       </tr>
                     );
@@ -1163,7 +898,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
             </div>
 
             {/* Ban Điều Hành Sinh Hoạt (Hiển thị linh hoạt nếu có cấu hình, để trống nếu chưa nhập) */}
-            {(profile.officers?.classLeader || profile.officers?.viceLeader || profile.officers?.groupLeader1) && (
+            {(profile.officers?.classLeader || profile.officers?.viceLeader || profile.officers?.studyLeader || profile.officers?.disciplineLeader) && (
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
                   Ban Điều Hành Tiết Sinh Hoạt:
@@ -1181,12 +916,16 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                       <strong className="text-slate-900">{profile.officers.viceLeader}</strong> (Lớp phó)
                     </div>
                   )}
-                  {(profile.officers.groupLeader1 || profile.officers.groupLeader2 || profile.officers.groupLeader3 || profile.officers.groupLeader4) && (
+                  {profile.officers.studyLeader && (
                     <div className="p-2 bg-white rounded-lg border border-slate-200">
-                      <span className="text-slate-500 font-medium block text-[11px]">Tổ trưởng 4 tổ:</span>
-                      <span>
-                        T1: {profile.officers.groupLeader1 || '—'} • T2: {profile.officers.groupLeader2 || '—'} • T3: {profile.officers.groupLeader3 || '—'} • T4: {profile.officers.groupLeader4 || '—'}
-                      </span>
+                      <span className="text-slate-500 font-medium block text-[11px]">Phụ trách học tập:</span>
+                      <strong className="text-slate-900">{profile.officers.studyLeader}</strong> (Lớp phó HT)
+                    </div>
+                  )}
+                  {profile.officers.disciplineLeader && (
+                    <div className="p-2 bg-white rounded-lg border border-slate-200">
+                      <span className="text-slate-500 font-medium block text-[11px]">Phụ trách nề nếp:</span>
+                      <strong className="text-slate-900">{profile.officers.disciplineLeader}</strong> (Lớp phó KL)
                     </div>
                   )}
                 </div>
@@ -1212,7 +951,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
             </div>
           </div>
         </div>
-      )}
+      );})()}
 
       {/* =========================================================================
           VIEW 2: THEO THÁNG (TỔNG HỢP CÁC TUẦN, CẢNH BÁO THÁNG, DỰ PHÓNG TT22)
@@ -1263,16 +1002,19 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-700">Tuần {wNum}</span>
-                        {rep && <span className="text-[10px] font-bold text-blue-700">{rep.collectiveCompetition?.estimatedRank || 'Hạng 1'}</span>}
+                        {rep && (
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
+                            {records.filter((r) => r.weekNumber === wNum).length} lượt
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-black text-slate-900">
-                          {rep?.collectiveCompetition?.finalScore ?? '—'}
+                      <div className="mt-1">
+                        <span className="text-xs font-semibold text-slate-800">
+                          {rep ? 'Đã ghi nhận nề nếp' : 'Chưa nạp sổ'}
                         </span>
-                        {rep && <span className="text-xs text-slate-500">/ 100đ</span>}
                       </div>
                       <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                        {rep ? rep.dateRange : 'Chưa nạp sổ'}
+                        {rep ? rep.dateRange : 'Trống'}
                       </p>
                     </div>
                   );
@@ -1321,7 +1063,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-900 text-sm">
-                          {al.studentName} (STT {al.stt} • {al.group})
+                          {al.studentName} (STT {al.stt})
                         </span>
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-800">
                           {al.totalMonthlyErrors || al.violations.length} lỗi trong tháng {selectedMonthNum}
@@ -1636,7 +1378,6 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-rose-700">#{student.stt}</span>
                         <span className="font-bold text-slate-900">{student.name}</span>
-                        <span className="text-slate-500">(Tổ {student.group})</span>
                       </div>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 text-rose-900">
                         {violations.length} lỗi vi phạm
@@ -1675,7 +1416,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                 >
                   {students.map((s) => (
                     <option key={s.id} value={s.id}>
-                      STT {s.stt}: {s.name} (Tổ {s.group} - {s.role})
+                      STT {s.stt}: {s.name} ({s.role})
                     </option>
                   ))}
                 </select>
@@ -1691,7 +1432,7 @@ export const WeeklyReportTab: React.FC<WeeklyReportTabProps> = ({
                       <h4 className="text-base font-black text-slate-900">
                         {inspectedStudentObj.name}
                         <span className="text-xs font-normal text-slate-500 ml-2">
-                          (STT: {inspectedStudentObj.stt} • Tổ {inspectedStudentObj.group} • {inspectedStudentObj.role})
+                          (STT: {inspectedStudentObj.stt} • {inspectedStudentObj.role})
                         </span>
                       </h4>
                       <p className="text-xs text-slate-600 mt-0.5">

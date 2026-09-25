@@ -368,7 +368,7 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
                   >
                     {students.map((s) => (
                       <option key={s.id} value={s.id}>
-                        STT {s.stt}: {s.name} (Tổ {s.group})
+                        STT {s.stt}: {s.name}
                       </option>
                     ))}
                   </select>
@@ -487,7 +487,7 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
                 <div className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <span>
-                    3. <strong>CHỈ GIỮ LẠI:</strong> Bảng danh sách họ tên 40 học sinh và cấu hình phân tổ ban đầu.
+                    3. <strong>CHỈ GIỮ LẠI:</strong> Bảng danh sách họ tên học sinh và hồ sơ lớp học.
                   </span>
                 </div>
               </div>

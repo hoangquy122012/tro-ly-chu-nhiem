@@ -294,7 +294,7 @@ export function exportScnToWordDoc(
  * Xuất Hồ sơ theo dõi cá nhân của 1 học sinh trong toàn bộ chu kỳ 35 tuần ra file Word (.doc)
  */
 export function exportStudentProfileToWordDoc(
-  student: { name: string; stt: number; group: number; role?: string; parentName?: string; parentPhone?: string },
+  student: { name: string; stt: number; group?: number; role?: string; parentName?: string; parentPhone?: string },
   records: Array<{
     date: string;
     dayOfWeek?: string;
@@ -377,7 +377,7 @@ export function exportStudentProfileToWordDoc(
           <tr>
             <td style="width: 50%; padding: 4px;"><b>Họ và tên học sinh:</b> ${student.name}</td>
             <td style="width: 25%; padding: 4px;"><b>STT:</b> ${student.stt}</td>
-            <td style="width: 25%; padding: 4px;"><b>Lớp:</b> ${profile.className} (Tổ ${student.group})</td>
+            <td style="width: 25%; padding: 4px;"><b>Lớp:</b> ${profile.className}</td>
           </tr>
           <tr>
             <td style="padding: 4px;"><b>Chức vụ:</b> ${student.role || 'Học sinh'}</td>

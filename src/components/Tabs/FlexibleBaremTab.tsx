@@ -37,6 +37,9 @@ export const CATEGORY_LABELS: Record<ViolationCategory, string> = {
   khen_thuong: 'Khen thưởng / Tuyên dương',
   phe_binh: 'Phê bình',
   khac: 'Quy định khác',
+  dong_phuc: 'Đồng phục / Khăn quàng',
+  hoc_tap: 'Học tập / Bài vở',
+  ve_sinh: 'Vệ sinh lớp học',
 };
 
 interface SelectedFileInfo {
@@ -77,6 +80,8 @@ export const FlexibleBaremTab: React.FC<FlexibleBaremTabProps> = ({
   // 2. Modal Đối Soát Barem (Chiếm 80% màn hình)
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [scannedRulesForModal, setScannedRulesForModal] = useState<ExtractedRuleInput[]>([]);
+  const [scanStatusNotice, setScanStatusNotice] = useState<string | null>(null);
+  const [nlpStatusNotice, setNlpStatusNotice] = useState<string | null>(null);
 
   // New Rule Modal Form State
   const [newRuleName, setNewRuleName] = useState('');

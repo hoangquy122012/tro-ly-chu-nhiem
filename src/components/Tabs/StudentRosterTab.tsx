@@ -34,7 +34,7 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
   onUpdateStudent,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<number | 'all'>('all');
+  const [sortBy, setSortBy] = useState<'stt' | 'name'>('stt');
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddRecordModal, setShowAddRecordModal] = useState(false);
@@ -43,7 +43,6 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
   // New Student Form State
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentGender, setNewStudentGender] = useState<'Nam' | 'Nữ'>('Nam');
-  const [newStudentGroup, setNewStudentGroup] = useState<number>(1);
   const [newStudentRole, setNewStudentRole] = useState<StudentRole>('Học sinh');
   const [newParentName, setNewParentName] = useState('');
   const [newParentPhone, setNewParentPhone] = useState('');
@@ -57,11 +56,16 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
   const [recPoints, setRecPoints] = useState<number>(-2);
   const [recMeasure, setRecMeasure] = useState('Nhắc nhở, rút kinh nghiệm');
 
-  const filteredStudents = students.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGroup = selectedGroup === 'all' || s.group === selectedGroup;
-    return matchesSearch && matchesGroup;
-  });
+  const filteredStudents = students
+    .filter((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === 'name') {
+        const nameA = a.name.split(' ').slice(-1)[0] || a.name;
+        const nameB = b.name.split(' ').slice(-1)[0] || b.name;
+        return nameA.localeCompare(nameB, 'vi');
+      }
+      return a.stt - b.stt;
+    });
 
   const getStudentStats = (studentId: string) => {
     const studentRecords = records.filter((r) => r.studentId === studentId);
@@ -93,7 +97,6 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
       stt: nextStt,
       name: newStudentName.trim(),
       gender: newStudentGender,
-      group: newStudentGroup,
       role: newStudentRole,
       parentName: newParentName.trim() || undefined,
       parentPhone: newParentPhone.trim() || undefined,
@@ -167,27 +170,26 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
             />
           </div>
 
-          {/* Group Filter */}
+          {/* Sorting Control */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
             <button
-              onClick={() => setSelectedGroup('all')}
-              className={`px-2.5 py-1 rounded-md font-medium transition ${
-                selectedGroup === 'all' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600'
+              type="button"
+              onClick={() => setSortBy('stt')}
+              className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
+                sortBy === 'stt' ? 'bg-white text-blue-700 shadow-xs font-bold' : 'text-slate-600'
               }`}
             >
-              Tất cả ({students.length})
+              Theo STT ({students.length})
             </button>
-            {[1, 2, 3, 4].map((g) => (
-              <button
-                key={g}
-                onClick={() => setSelectedGroup(g)}
-                className={`px-2.5 py-1 rounded-md font-medium transition ${
-                  selectedGroup === g ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                Tổ {g}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => setSortBy('name')}
+              className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
+                sortBy === 'name' ? 'bg-white text-blue-700 shadow-xs font-bold' : 'text-slate-600'
+              }`}
+            >
+              Tên A-Z
+            </button>
           </div>
         </div>
 
@@ -223,7 +225,7 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                         {student.name}
                       </h4>
                       <span className="text-[11px] text-slate-500">
-                        {student.gender} • Tổ {student.group} {student.role !== 'Học sinh' ? `• ${student.role}` : ''}
+                        {student.gender} {student.role !== 'Học sinh' ? `• ${student.role}` : ''}
                       </span>
                     </div>
                   </div>
@@ -289,7 +291,7 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">{activeStudent.name}</h3>
                   <p className="text-xs text-slate-500">
-                    {activeStudent.gender} • Tổ {activeStudent.group} • {activeStudent.role}
+                    {activeStudent.gender} • {activeStudent.role}
                   </p>
                   <p className="text-xs text-slate-600 mt-0.5">
                     Phụ huynh: {activeStudent.parentName || 'Chưa cập nhật'} • SĐT: {activeStudent.parentPhone || 'Chưa có'}
@@ -601,32 +603,16 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Giới tính:</label>
-                  <select
-                    value={newStudentGender}
-                    onChange={(e) => setNewStudentGender(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
-                  >
-                    <option value="Nam">Nam</option>
-                    <option value="Nữ">Nữ</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Tổ:</label>
-                  <select
-                    value={newStudentGroup}
-                    onChange={(e) => setNewStudentGroup(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
-                  >
-                    <option value={1}>Tổ 1</option>
-                    <option value={2}>Tổ 2</option>
-                    <option value={3}>Tổ 3</option>
-                    <option value={4}>Tổ 4</option>
-                  </select>
-                </div>
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Giới tính:</label>
+                <select
+                  value={newStudentGender}
+                  onChange={(e) => setNewStudentGender(e.target.value as any)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
+                >
+                  <option value="Nam">Nam</option>
+                  <option value="Nữ">Nữ</option>
+                </select>
               </div>
 
               <div>
@@ -641,10 +627,6 @@ export const StudentRosterTab: React.FC<StudentRosterTabProps> = ({
                   <option value="Lớp phó học tập">Lớp phó học tập</option>
                   <option value="Lớp phó kỷ luật">Lớp phó kỷ luật</option>
                   <option value="Lớp phó lao động">Lớp phó lao động</option>
-                  <option value="Tổ trưởng Tổ 1">Tổ trưởng Tổ 1</option>
-                  <option value="Tổ trưởng Tổ 2">Tổ trưởng Tổ 2</option>
-                  <option value="Tổ trưởng Tổ 3">Tổ trưởng Tổ 3</option>
-                  <option value="Tổ trưởng Tổ 4">Tổ trưởng Tổ 4</option>
                   <option value="Cán sự bộ môn">Cán sự bộ môn</option>
                 </select>
               </div>

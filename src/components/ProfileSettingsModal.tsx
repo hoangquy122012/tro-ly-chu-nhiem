@@ -80,21 +80,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
 
     lines.forEach((line, index) => {
       // Formats:
-      // "1. Nguyễn An Khang - Tổ 1"
-      // "1\tNguyễn An Khang\t1"
-      // "Nguyễn An Khang, Tổ 2"
-      // "1  Nguyễn An Khang  Nam  1"
+      // "1. Nguyễn An Khang"
+      // "1\tNguyễn An Khang"
+      // "Nguyễn An Khang"
+      // "1  Nguyễn An Khang  Nam"
       let stt = index + 1;
       let name = line;
-      let group = ((index % 4) + 1); // default distribution 1, 2, 3, 4
       let gender: 'Nam' | 'Nữ' = 'Nam';
       let role: any = 'Học sinh';
-
-      // Check group match (e.g. "Tổ 1", "Tổ 2", or last number)
-      const groupMatch = line.match(/(?:tổ|to|group|nhóm)\s*([1-4])/i);
-      if (groupMatch && groupMatch[1]) {
-        group = parseInt(groupMatch[1], 10);
-      }
 
       // Check tab or comma or dash separated
       if (line.includes('\t')) {
@@ -104,21 +97,16 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
           if (!isNaN(firstNum)) {
             stt = firstNum;
             name = parts[1];
-            if (parts.length >= 3) {
-              const lastNum = parseInt(parts[2], 10);
-              if (!isNaN(lastNum) && lastNum >= 1 && lastNum <= 4) group = lastNum;
-            }
           } else {
             name = parts[0];
           }
         }
       } else {
-        // Regex: (optional stt like "1." or "1 -") then (name) then (optional "- Tổ X")
-        const match = line.match(/^(?:(\d+)[\s.,\-_)]+)?(.*?)(?:[\s,\-_|]+(?:tổ|to|group|nhóm)?\s*([1-4]))?$/i);
+        // Regex: (optional stt like "1." or "1 -") then (name)
+        const match = line.match(/^(?:(\d+)[\s.,\-_)]+)?(.*)$/i);
         if (match) {
           if (match[1]) stt = parseInt(match[1], 10);
           if (match[2]) name = match[2].trim();
-          if (match[3]) group = parseInt(match[3], 10);
         }
       }
 
@@ -134,7 +122,6 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
           stt,
           name,
           gender,
-          group,
           role,
         });
       }
@@ -159,10 +146,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       officers: {
         classLeader: '',
         viceLeader: '',
-        groupLeader1: '',
-        groupLeader2: '',
-        groupLeader3: '',
-        groupLeader4: '',
+        studyLeader: '',
+        disciplineLeader: '',
       },
     });
   };
@@ -385,7 +370,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <ClipboardList className="w-4 h-4 text-indigo-600" />
                     <h3 className="font-bold text-slate-900 uppercase tracking-wide">
-                      2. Khu vực Danh sách học sinh (Dán nhanh STT, Họ tên, Phân tổ)
+                      2. Khu vực Danh sách học sinh (Dán nhanh STT, Họ và tên)
                     </h3>
                   </div>
                   <span className="text-[11px] text-slate-500">
@@ -395,15 +380,15 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
 
                 <div className="space-y-2">
                   <p className="text-[11px] text-slate-600 leading-relaxed">
-                    GVCN có thể sao chép nhanh cột STT, Họ tên, Phân tổ từ Excel hoặc dán danh sách theo định dạng:
-                    <code className="text-blue-700 bg-blue-50 px-1 py-0.5 rounded ml-1 font-mono">1. Nguyễn An Khang - Tổ 1</code>
+                    GVCN có thể sao chép nhanh cột STT, Họ tên từ Excel hoặc dán danh sách theo định dạng:
+                    <code className="text-blue-700 bg-blue-50 px-1 py-0.5 rounded ml-1 font-mono">1. Nguyễn An Khang</code>
                   </p>
 
                   <textarea
                     rows={4}
                     value={pasteRosterInput}
                     onChange={(e) => setPasteRosterInput(e.target.value)}
-                    placeholder={`Dán danh sách học sinh tại đây (mỗi em một dòng):\n1. Nguyễn An Khang - Tổ 1\n2. Trần Bảo Ngọc - Tổ 1\n3. Lê Hoàng Long - Tổ 2\n4. Vũ Minh Anh - Tổ 2\n... hoặc paste trực tiếp các cột từ Excel`}
+                    placeholder={`Dán danh sách học sinh tại đây (mỗi em một dòng):\n1. Nguyễn An Khang\n2. Trần Bảo Ngọc\n3. Lê Hoàng Long\n4. Vũ Minh Anh\n... hoặc paste trực tiếp các cột từ Excel`}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                   />
 
@@ -491,15 +476,15 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
 
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      Tổ trưởng Tổ 1:
+                      Lớp phó học tập:
                     </label>
                     <input
                       type="text"
-                      value={formData.officers?.groupLeader1 || ''}
+                      value={formData.officers?.studyLeader || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          officers: { ...formData.officers, groupLeader1: e.target.value },
+                          officers: { ...formData.officers, studyLeader: e.target.value },
                         })
                       }
                       placeholder="Để trống nếu chưa bầu"
@@ -509,51 +494,15 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
 
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      Tổ trưởng Tổ 2:
+                      Lớp phó kỷ luật:
                     </label>
                     <input
                       type="text"
-                      value={formData.officers?.groupLeader2 || ''}
+                      value={formData.officers?.disciplineLeader || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          officers: { ...formData.officers, groupLeader2: e.target.value },
-                        })
-                      }
-                      placeholder="Để trống nếu chưa bầu"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">
-                      Tổ trưởng Tổ 3:
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.officers?.groupLeader3 || ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          officers: { ...formData.officers, groupLeader3: e.target.value },
-                        })
-                      }
-                      placeholder="Để trống nếu chưa bầu"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">
-                      Tổ trưởng Tổ 4:
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.officers?.groupLeader4 || ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          officers: { ...formData.officers, groupLeader4: e.target.value },
+                          officers: { ...formData.officers, disciplineLeader: e.target.value },
                         })
                       }
                       placeholder="Để trống nếu chưa bầu"

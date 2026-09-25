@@ -181,7 +181,6 @@ export const TT22EvaluationTab: React.FC<TT22EvaluationTabProps> = ({
               <tr>
                 <th className="py-3 px-3 w-12 text-center">STT</th>
                 <th className="py-3 px-4 w-44">Họ và tên học sinh</th>
-                <th className="py-3 px-3 w-20 text-center">Tổ</th>
                 <th className="py-3 px-3 w-24 text-center">Số lỗi tháng</th>
                 <th className="py-3 px-3 w-24 text-center">Điểm tốt</th>
                 <th className="py-3 px-4 w-32 text-center">Đề xuất TT22</th>
@@ -202,7 +201,6 @@ export const TT22EvaluationTab: React.FC<TT22EvaluationTabProps> = ({
                         <span className="block text-[10px] text-blue-600 font-normal">{student.role}</span>
                       )}
                     </td>
-                    <td className="py-2.5 px-3 text-center text-slate-600">Tổ {student.group}</td>
                     <td className="py-2.5 px-3 text-center font-bold text-slate-900">
                       <span className={totalViolations > 0 ? 'text-rose-600' : 'text-slate-400'}>
                         {totalViolations}
